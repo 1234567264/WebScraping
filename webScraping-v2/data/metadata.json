@@ -1,0 +1,14 @@
+{
+    "items_por_pagina": 60,
+    "paginas": {
+        "1": {
+            "cantidad": 60
+        },
+        "2": {
+            "cantidad": 60
+        },
+        "3": {
+            "cantidad": 60
+        }
+    }
+}
