@@ -9,10 +9,9 @@ from PIL import Image  # pip install pillow
 # CONFIGURACIÓN — AJUSTA ESTO SEGÚN TU PROYECTO
 # ============================================================
  
-# Proveedor real detectado en tu proyecto (README.md / config/settings.py):
-# fuente = designsaimari.com
+# Fuente: designsaimari.com
 PROVEEDOR_NOMBRE = "Designs Aimari"
-PROVEEDOR_PREFIJO = "AIM"  # cámbialo si tu sala pidió otro prefijo específico
+PROVEEDOR_PREFIJO = "AIM"
  
 # Rutas base (relativas a la carpeta donde corres el script)
 RUTA_JSON = os.path.join("data", "productos.json")
@@ -164,7 +163,8 @@ def consolidar():
  
         ext = os.path.splitext(p["imagen_original"])[1].lower()
         numero = f"{contador:03d}"
-        id_registro = f"{PROVEEDOR_PREFIJO}-P001-{numero}"
+        pagina_str = f"P{int(p['pagina']):03d}"
+        id_registro = f"{PROVEEDOR_PREFIJO}-{pagina_str}-{numero}"
         nombre_final = f"{id_registro}{ext}"
  
         destino = os.path.join(RUTA_IMAGENES_DESTINO, nombre_final)

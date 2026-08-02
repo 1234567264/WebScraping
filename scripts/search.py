@@ -21,7 +21,6 @@ def CargarDatosVectoriales(csvPath: str = CSVPATH, embeddingsPath: str = EMBEDDI
     
     return df_products, embeddings
 
-#se va cambiar mañana
 def BuscarSimilares(
     vector_query: list | np.ndarray,
     k: int = 5,

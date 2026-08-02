@@ -1,0 +1,16 @@
+{
+    "total_productos": 100,
+    "proveedor": "Designs Aimari",
+    "fecha_generacion": "2026-08-02T14:51:40",
+    "columnas": [
+        "id",
+        "proveedor",
+        "pagina",
+        "imagen",
+        "nombre_original",
+        "url"
+    ],
+    "ruta_csv": "C:\\Users\\elmej\\OneDrive\\Imágenes\\webScaping-design\\WebScraping\\data\\products.csv",
+    "ruta_embeddings": "C:\\Users\\elmej\\OneDrive\\Imágenes\\webScaping-design\\WebScraping\\data\\embeddings.npy",
+    "embeddings_disponibles": false
+}
