@@ -115,7 +115,7 @@ def main():
 
         inicio = obtener_inicio_pagina(pagina)
 
-        productos = extraer_productos(html,inicio=inicio)
+        productos = extraer_productos(html,inicio=inicio,pagina=pagina)
 
         actualizar_metadata_pagina( pagina,len(productos))
 

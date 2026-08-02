@@ -24,7 +24,7 @@ def obtener_id_producto(url):
 
 
 
-def extraer_productos(html, inicio=1):
+def extraer_productos(html, inicio=1, pagina=1):
 
     soup = BeautifulSoup(html, "lxml")
 
@@ -59,6 +59,8 @@ def extraer_productos(html, inicio=1):
         productos.append({
 
             "id": id_producto,
+            "proveedor": "Designs Aimari",
+            "pagina": pagina,
             "numero": indice,
             "nombre": nombre,
             "url": url,
