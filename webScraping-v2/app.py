@@ -21,7 +21,9 @@ from PIL import Image
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-DATA_DIR = "data"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+DATA_DIR = os.path.join(BASE_DIR, "data")
 IMAGES_DIR = os.path.join(DATA_DIR, "images")
 INDEX_EMB = os.path.join(DATA_DIR, "index_embeddings.npy")
 INDEX_META = os.path.join(DATA_DIR, "index_metadata.json")
@@ -55,6 +57,12 @@ def guardar_evaluacion(filas):
 
 st.title("🔍 Buscador de estampados similares")
 st.caption("Sube una imagen y encuentra los 5 diseños más parecidos en la base de datos")
+
+# st.write("Directorio actual:", os.getcwd())
+# st.write("INDEX_EMB:", INDEX_EMB)
+# st.write("INDEX_META:", INDEX_META)
+# st.write("Existe EMB:", os.path.exists(INDEX_EMB))
+# st.write("Existe META:", os.path.exists(INDEX_META))
 
 if not os.path.exists(INDEX_EMB) or not os.path.exists(INDEX_META):
     st.error("No se encontró el índice todavía.")

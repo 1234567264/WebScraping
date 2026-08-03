@@ -1,87 +1,6 @@
-# Aimari Web Scraper
+# Ejecución del proyecto
 
-Web scraper desarrollado en Python para extraer diseños de la página **Designs Aimari**.
-
-El proyecto permite:
-
-- Extraer productos desde páginas web.
-- Obtener nombres e imágenes.
-- Guardar información en JSON.
-- Descargar imágenes localmente.
-- Exportar datos a Excel.
-- Controlar cantidad de imágenes.
-- Trabajar con múltiples páginas.
-- Ejecutar procesos en modo `fresh` o `update`.
-
----
-
-# Características
-
-## Extracción de productos
-
-El scraper obtiene:
-
-- Nombre del diseño.
-- URL de la imagen.
-- Extensión del archivo.
-- Nombre final del archivo.
-
-Ejemplo:
-
-```json
-{
-    "numero": 1,
-    "nombre": "Guadalcacin Blue",
-    "url": "https://media.designsaimari.com/products/image.jpg",
-    "archivo": "1-Guadalcacin Blue.jpg"
-}
-```
-
----
-
-# Estructura del proyecto
-
-```
-webScraping-v2/
-
-│
-├── main.py
-│
-├── scraper/
-│   ├── scraper.py
-│   ├── parser.py
-│   └── downloader.py
-│
-├── storage/
-│   └── exporter.py
-│
-├── utils/
-│   ├── helpers.py
-│   ├── pagination.py
-│   ├── limits.py
-│   └── update.py
-│
-├── data/
-│   ├── images/
-│   ├── html/
-│   ├── productos.json
-│   ├── metadata.json
-│   └── productos.xlsx
-│
-└── requirements.txt
-```
-
----
-
-# Instalación
-
-## 1. Clonar proyecto
-
-```bash
-git clone <url-del-repositorio>
-```
-
-Entrar a la carpeta:
+Todos los comandos deben ejecutarse desde la carpeta `webScraping-v2`.
 
 ```bash
 cd webScraping-v2
@@ -89,426 +8,96 @@ cd webScraping-v2
 
 ---
 
-## 2. Crear entorno virtual (recomendado)
+## 1. Ejecutar el Web Scraper
 
-Windows:
-
-```bash
-python -m venv venv
-```
-
-Activar:
-
-```bash
-venv\Scripts\activate
-```
-
-Linux / Mac:
-
-```bash
-source venv/bin/activate
-```
-
----
-
-## 3. Instalar dependencias
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-# Dependencias utilizadas
-
-## requests
-
-Permite realizar peticiones HTTP.
-
-Uso:
-
-- Descargar HTML.
-- Descargar imágenes.
-
----
-
-## beautifulsoup4
-
-Permite analizar HTML.
-
-Uso:
-
-- Buscar imágenes.
-- Extraer atributos como `src` y `alt`.
-
----
-
-## lxml
-
-Parser utilizado por BeautifulSoup.
-
-Permite una lectura más rápida del HTML.
-
----
-
-## openpyxl
-
-Permite generar archivos Excel.
-
-Uso:
-
-- Exportar productos a `.xlsx`.
-
----
-
-# Uso del programa
-
-La ejecución principal se realiza mediante:
-
-```bash
-python main.py
-```
-
----
-
-# Argumentos disponibles
-
-El programa acepta tres argumentos:
-
-```
---imagenes
---paginas
---modo
-```
-
----
-
-# Control de imágenes
-
-Argumento:
-
-```bash
---imagenes
-```
-
-Controla cuántas imágenes descargar.
-
----
-
-## Descargar todas las imágenes
-
-```bash
-python main.py --imagenes all
-```
-
-Resultado:
-
-Descarga todos los productos encontrados.
-
----
-
-## Descargar cantidad específica
+Extrae los productos desde Designs Aimari, descarga las imágenes y genera los archivos de datos.
 
 Ejemplo:
-
-```bash
-python main.py --imagenes 100
-```
-
-Resultado:
-
-Selecciona solamente las primeras 100 imágenes.
-
----
-
-# Control de páginas
-
-Argumento:
-
-```bash
---paginas
-```
-
-Define qué páginas serán procesadas.
-
----
-
-## Página individual
-
-Ejemplo:
-
-```bash
-python main.py --paginas 1
-```
-
-Procesa únicamente:
-
-```
-pagina=1
-```
-
----
-
-## Varias páginas
-
-Ejemplo:
-
-```bash
-python main.py --paginas 1,2,3
-```
-
-Procesa:
-
-```
-pagina 1
-pagina 2
-pagina 3
-```
-
----
-
-## Todas las páginas
-
-Ejemplo:
-
-```bash
-python main.py --paginas all
-```
-
-Procesa todas las páginas disponibles.
-
----
-
-# Modos de ejecución
-
-Argumento:
-
-```bash
---modo
-```
-
-Actualmente existen dos modos:
-
-```
-fresh
-update
-```
-
----
-
-# Modo fresh
-
-Es el modo de limpieza completa.
-
-Ejemplo:
-
-```bash
-python main.py --modo fresh
-```
-
-Funcionamiento:
-
-1. Limpia la carpeta `data`.
-2. Genera nueva metadata.
-3. Extrae nuevamente todos los productos.
-4. Guarda un nuevo JSON.
-5. Descarga nuevamente las imágenes.
-6. Genera nuevamente el Excel.
-
-Útil cuando:
-
-- Se quiere una extracción desde cero.
-- Se quiere actualizar toda la base.
-
----
-
-# Modo update
-
-Ejemplo:
-
-```bash
-python main.py --modo update
-```
-
-Funcionamiento:
-
-1. Lee productos existentes.
-2. Obtiene nuevos productos.
-3. Fusiona información nueva con información antigua.
-4. Conserva productos existentes.
-
-Útil cuando:
-
-- La página tiene nuevos diseños.
-- No se quiere borrar información anterior.
-
----
-
-# Ejemplos completos
-
-## Extraer primera página completa
-
-```bash
-python main.py --paginas 1 --imagenes all --modo fresh
-```
-
----
-
-## Extraer páginas 1 y 2 con límite de imágenes
 
 ```bash
 python main.py --paginas 1,2 --imagenes 100 --modo fresh
 ```
 
+Este proceso genera:
+
+- `data/productos.json`
+- `data/productos.xlsx`
+- `data/metadata.json`
+- `data/images/`
+
+> Si agregas nuevas páginas, cambias el número de imágenes o actualizas el dataset, vuelve a ejecutar este paso.
+
 ---
 
-## Actualizar información existente
+## 2. Generar el índice vectorial (CLIP)
+
+Una vez descargadas las imágenes, genera los embeddings utilizados por el buscador visual.
 
 ```bash
-python main.py --paginas 1,2 --modo update
+python build_index.py
 ```
+
+Este proceso:
+
+- Carga el modelo CLIP (`clip-ViT-B-32`).
+- Procesa todas las imágenes de `data/images/`.
+- Genera:
+  - `data/index_embeddings.npy`
+  - `data/index_metadata.json`
+
+> Solo es necesario ejecutarlo cuando cambian las imágenes, `productos.json` o el modelo de embeddings.
 
 ---
 
-# Archivos generados
+## 3. Ejecutar la aplicación web
 
-Después de ejecutar el scraper:
+Con el índice generado, inicia la interfaz de búsqueda visual.
 
-## productos.json
+```bash
+streamlit run app.py
+```
 
-Contiene todos los productos extraídos.
-
-Ejemplo:
+Luego abre:
 
 ```
-data/productos.json
+http://localhost:8501
 ```
+
+La aplicación permite:
+
+- Subir una imagen.
+- Obtener los 5 diseños más similares.
+- Visualizar nombre, URL y puntaje de similitud.
+- Evaluar manualmente los resultados.
+- Guardar la evaluación en `data/evaluacion.csv`.
+
+> Mientras el índice no cambie, solo necesitas ejecutar `streamlit run app.py`.
 
 ---
 
-## metadata.json
+# Flujo completo
 
-Guarda información de páginas procesadas.
-
-Ejemplo:
-
-```json
-{
-    "paginas": {
-        "1": {
-            "cantidad":60
-        },
-        "2":{
-            "cantidad":60
-        }
-    },
-    "items_por_pagina":60
-}
-```
-
----
-
-## images/
-
-Contiene las imágenes descargadas.
-
-Ejemplo:
-
-```
-data/images/
-
-1-Guadalcacin Blue.jpg
-2-Argentina Drexx.jpg
-3-Ballbreakers DUO Kit.jpg
-```
-
----
-
-## productos.xlsx
-
-Archivo Excel generado con la información extraída.
-
----
-
-# Flujo interno
-
-El programa trabaja en este orden:
-
-```
+```text
 main.py
-
-    |
-    |
-    ↓
-
-Obtener configuración CLI
-
-    |
-    |
-    ↓
-
-Validar metadata
-
-    |
-    |
-    ↓
-
-Descargar HTML
-
-    |
-    |
-    ↓
-
-Parsear productos
-
-    |
-    |
-    ↓
-
-Aplicar límite de imágenes
-
-    |
-    |
-    ↓
-
-Actualizar o reemplazar JSON
-
-    |
-    |
-    ↓
-
-Descargar imágenes
-
-    |
-    |
-    ↓
-
-Exportar Excel
+    │
+    ▼
+Scraping de productos
+    │
+    ▼
+productos.json
+images/
+metadata.json
+    │
+    ▼
+build_index.py
+    │
+    ▼
+index_embeddings.npy
+index_metadata.json
+    │
+    ▼
+app.py (Streamlit)
+    │
+    ▼
+Búsqueda visual (Top 5)
 ```
-
----
-
-# Próximas mejoras
-
-Pendientes:
-
-- Soporte completo para rangos de páginas:
-  ```
-  --paginas 1-5
-  ```
-
-- Mejor sistema de actualización usando identificadores únicos.
-
-- Evitar descargar imágenes repetidas.
-
-- Control de errores de conexión.
-
-- Descarga paralela de imágenes.
-
-- Registro de logs.
-
----
-
-# Autor
-
-Proyecto desarrollado para automatización de extracción de diseños deportivos desde Designs Aimari.
