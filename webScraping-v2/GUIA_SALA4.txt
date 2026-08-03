@@ -1,0 +1,43 @@
+======================================================================
+         GUIA DE INSTALACION Y EJECUCION - SALA 4 (CLIP)
+======================================================================
+
+1. REQUISITOS A INSTALAR
+----------------------------------------------------------------------
+Abre la terminal en la carpeta principal (WebScraping/) e instala únicamente 
+las librerias necesarias para el procesamiento de imagenes e IA:
+
+   pip install torch torchvision transformers pillow numpy
+
+
+2. ARCHIVOS DEL MODULO (SALA 4)
+----------------------------------------------------------------------
+Asegurate de que tus archivos esten ubicados en estas rutas:
+
+   WebScraping/
+   │
+   ├── data/
+   │   ├── images_final/             <- Carpeta con las 100 imagenes (.jpg, .png)
+   │   └── embeddings_productos.npy <- Archivo .npy generado con los vectores
+   │
+   └── scripts/
+       ├── generar_embeddings.py     <- Script 1: Convierte imagenes a vectores
+       └── buscar_por_imagen.py      <- Script 2: Busca por similitud coseno (Top 5)
+
+
+3. ORDEN DE EJECUCION
+----------------------------------------------------------------------
+
+   PASO 1: Generar la base de vectores (Embeddings)
+   Procesa las 100 imagenes con el modelo CLIP (openai/clip-vit-base-patch32) 
+   y crea el archivo binario 'embeddings_productos.npy':
+
+      python scripts/generar_embeddings.py
+
+
+   PASO 2: Probar la busqueda visual por similitud
+   Envia una imagen de prueba como argumento para obtener las 5 mas parecidas:
+
+      python scripts/buscar_por_imagen.py data/images_final/BUS-P001-001.jpg
+
+======================================================================
