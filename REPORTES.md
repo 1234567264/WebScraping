@@ -65,7 +65,7 @@ Este documento detalla el estado actual del prototipo de búsqueda visual con RA
 
 ### ¿Qué FALTA?
 * **Nada.** El módulo de extracción visual de características y búsqueda por similitud coseno está **100% completado** y probado con un 100.00% de precisión en autocomparación y ~75% en coincidencias de patrón/diseño.
-
+ 
 ---
 
 ## 🔴 Sala 2: Interfaz, pruebas y evaluación (Por Iniciar)
