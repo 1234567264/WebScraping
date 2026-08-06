@@ -30,6 +30,6 @@ def descargar_imagenes():
 
             archivo.write(respuesta.content)
 
-        print(f"✔ {nombre_archivo}")
+        print(f"[OK] {nombre_archivo}")
 
     print("\nDescarga finalizada.")

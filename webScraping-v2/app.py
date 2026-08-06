@@ -84,7 +84,20 @@ if archivo_subido:
 
     emb_consulta = model.encode(imagen_consulta).reshape(1, -1)
     similitudes = cosine_similarity(emb_consulta, embeddings)[0]
-    top5_idx = np.argsort(similitudes)[::-1][:5]
+    sorted_indices = np.argsort(similitudes)[::-1]
+    
+    top5_idx = []
+    nombres_vistos = set()
+    for idx in sorted_indices:
+        nombre_completo = metadata[idx]["nombre"]
+        base_nombre = nombre_completo.split(" (Variante")[0].strip()
+        
+        if base_nombre not in nombres_vistos:
+            nombres_vistos.add(base_nombre)
+            top5_idx.append(idx)
+            
+        if len(top5_idx) >= 5:
+            break
 
     with col_der:
         st.subheader("Top 5 resultados similares")

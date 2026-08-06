@@ -82,7 +82,7 @@ def nomenclatura_valida(nombre_archivo):
     Verifica que el nombre siga el patrón PROVEEDOR-Pxxx-xxx.ext
     Ejemplo válido: BUS-P001-001.jpg
     """
-    patron = rf"^{PROVEEDOR_PREFIJO}-P\d{{3}}-\d{{3}}\.(jpg|jpeg|png|gif)$"
+    patron = rf"^{PROVEEDOR_PREFIJO}-P\d{{3}}-\d{{3}}\.(jpg|jpeg|png)$"
     return re.match(patron, nombre_archivo, re.IGNORECASE) is not None
  
  
