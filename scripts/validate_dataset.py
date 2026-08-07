@@ -37,9 +37,9 @@ from PIL import Image
 # ─────────────────────────────────────────────
 BASE_DIR   = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CSV_PATH   = os.path.join(BASE_DIR, "data", "products.csv")
-IMAGES_DIR = os.path.join(BASE_DIR, "data", "images")
+IMAGES_DIR = os.path.join(BASE_DIR, "data", "images_final")
 
-EXTENSIONES_PERMITIDAS = (".jpg", ".jpeg", ".png")
+EXTENSIONES_PERMITIDAS = (".jpg", ".jpeg", ".png", ".gif")
 
 
 # ─────────────────────────────────────────────

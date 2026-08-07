@@ -14,11 +14,11 @@ CSVPATH = os.path.join(DATADIR, "products.csv")
 JSONPATH = os.path.join(DATADIR, "metadata.json")
 EMBEDDINGSPATH = os.path.join(DATADIR, "embeddings.npy")
 
-# Ruta del CSV consolidado generado por Sala 1 (consolidar.py)
-CONSOLIDADO_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "webScraping-v2", "data", "consolidado.csv"
+# Ruta del CSV products generado por Sala 1 (consolidar.py)
+CSV_SALA1_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "data", "products.csv"
 )
-CONSOLIDADO_PATH = os.path.abspath(CONSOLIDADO_PATH)
+CSV_SALA1_PATH = os.path.abspath(CSV_SALA1_PATH)
 
 # Columnas que produce consolidar.py y que search.py espera
 COLUMNAS_REQUERIDAS = ["id", "proveedor", "pagina", "imagen", "nombre_original", "url"]
@@ -63,34 +63,33 @@ def GuardarEmbeddings(matrix_embeddings: np.ndarray, embeddings_path: str = EMBE
 
 
 # ─────────────────────────────────────────────
-# 2. FLUJO REAL — leer desde consolidado.csv (Sala 1)
+# 2. FLUJO REAL — leer desde products.csv (Sala 1)
 # ─────────────────────────────────────────────
 
-def CargarDesdeConsolidado(consolidado_path: str = CONSOLIDADO_PATH) -> pd.DataFrame:
+def CargarDesdeSala1(csv_path: str = CSV_SALA1_PATH) -> pd.DataFrame:
     """
-    Lee data/consolidado.csv generado por consolidar.py (Sala 1) y
+    Lee data/products.csv generado por consolidar.py (Sala 1) y
     devuelve un DataFrame con las columnas que search.py espera.
 
-    Columnas de entrada (consolidado.csv):
+    Columnas de entrada (products.csv):
         id, proveedor, pagina, imagen, nombre_original, url
 
     Las mismas se conservan sin transformación; solo se valida que existan.
     """
-    if not os.path.exists(consolidado_path):
+    if not os.path.exists(csv_path):
         raise FileNotFoundError(
-            f"[Ingest] No se encontró '{consolidado_path}'.\n"
+            f"[Ingest] No se encontró '{csv_path}'.\n"
             "Ejecuta primero:\n"
-            "  cd webScraping-v2\n"
-            "  python consolidar.py"
+            "  python scripts/consolidar.py"
         )
 
-    df = pd.read_csv(consolidado_path, encoding="utf-8")
+    df = pd.read_csv(csv_path, encoding="utf-8")
 
     # Verificar que el CSV tenga todas las columnas necesarias
     faltantes = [c for c in COLUMNAS_REQUERIDAS if c not in df.columns]
     if faltantes:
         raise ValueError(
-            f"[Ingest] El archivo '{consolidado_path}' le faltan columnas: {faltantes}\n"
+            f"[Ingest] El archivo '{csv_path}' le faltan columnas: {faltantes}\n"
             "Verifica que consolidar.py esté actualizado."
         )
 
@@ -101,18 +100,18 @@ def CargarDesdeConsolidado(consolidado_path: str = CONSOLIDADO_PATH) -> pd.DataF
     if eliminadas > 0:
         print(f"[Ingest] ⚠️  Se eliminaron {eliminadas} filas con id o imagen vacíos.")
 
-    print(f"[Ingest] Cargados {len(df)} productos desde '{consolidado_path}'")
+    print(f"[Ingest] Cargados {len(df)} productos desde '{csv_path}'")
     return df
 
 
 def IngestarDatosReales():
     """
     Flujo principal de Sala 3:
-    1. Lee consolidado.csv (Sala 1)
-    2. Guarda products.csv (contrato con search.py y Sala 4)
+    1. Lee products.csv (Sala 1)
+    2. Revalida/mantiene products.csv (contrato con search.py y Sala 4)
     3. Actualiza metadata.json (embeddings_disponibles = false hasta que Sala 4 entregue CLIP)
     """
-    df = CargarDesdeConsolidado()
+    df = CargarDesdeSala1()
     GuardarProductos_csv(df)
     GenerarMetadata(df)
     print("[Ingest] ✅ Flujo real completado. Listo para recibir embeddings de Sala 4.")
@@ -222,7 +221,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--demo",
         action="store_true",
-        help="Genera datos sintéticos de prueba en lugar de usar consolidado.csv"
+        help="Genera datos sintéticos de prueba en lugar de usar products.csv"
     )
     args = parser.parse_args()
 
