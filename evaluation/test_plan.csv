@@ -1,0 +1,21 @@
+grupo,archivo,descripcion,resultado_esperado,estado
+A,test_01_A.jpg,Imagen ya en biblioteca: AIM-P001-001 Guadalcacin Blue,Top 1 = misma imagen (score ~1.0),lista
+A,test_02_A.jpg,Imagen ya en biblioteca: AIM-P001-016 Inter Milan 2026-2027,Top 1 = misma imagen (score ~1.0),lista
+A,test_03_A.jpg,Imagen ya en biblioteca: AIM-P001-031 Garra de Tigre,Top 1 = misma imagen (score ~1.0),lista
+A,test_04_A.jpg,Imagen ya en biblioteca: AIM-P001-046 Caneras Sports Degrade,Top 1 = misma imagen (score ~1.0),lista
+A,test_05_A.jpg,Imagen ya en biblioteca: AIM-P001-061 Gladeador Black Sports,Top 1 = misma imagen (score ~1.0),lista
+B,test_06_B.jpg,Imagen externa muy parecida (agregar manualmente),Al menos 1 resultado del Top 5 visualmente relacionado,pendiente
+B,test_07_B.jpg,Imagen externa muy parecida (agregar manualmente),Al menos 1 resultado del Top 5 visualmente relacionado,pendiente
+B,test_08_B.jpg,Imagen externa muy parecida (agregar manualmente),Al menos 1 resultado del Top 5 visualmente relacionado,pendiente
+B,test_09_B.jpg,Imagen externa muy parecida (agregar manualmente),Al menos 1 resultado del Top 5 visualmente relacionado,pendiente
+B,test_10_B.jpg,Imagen externa muy parecida (agregar manualmente),Al menos 1 resultado del Top 5 visualmente relacionado,pendiente
+C,test_11_C.jpg,Camiseta de otro equipo/estilo (agregar manualmente),Algunos resultados utiles, otros no,pendiente
+C,test_12_C.jpg,Camiseta de otro equipo/estilo (agregar manualmente),Algunos resultados utiles, otros no,pendiente
+C,test_13_C.jpg,Camiseta de otro equipo/estilo (agregar manualmente),Algunos resultados utiles, otros no,pendiente
+C,test_14_C.jpg,Camiseta de otro equipo/estilo (agregar manualmente),Algunos resultados utiles, otros no,pendiente
+C,test_15_C.jpg,Camiseta de otro equipo/estilo (agregar manualmente),Algunos resultados utiles, otros no,pendiente
+D,test_16_D.jpg,Imagen que NO es camiseta: paisaje (agregar manualmente),Scores bajos; marcar Incorrecto,pendiente
+D,test_17_D.jpg,Imagen que NO es camiseta: persona (agregar manualmente),Scores bajos; marcar Incorrecto,pendiente
+D,test_18_D.jpg,Imagen que NO es camiseta: texto/logo (agregar manualmente),Scores bajos; marcar Incorrecto,pendiente
+D,test_19_D.jpg,Imagen que NO es camiseta: comida (agregar manualmente),Scores bajos; marcar Incorrecto,pendiente
+D,test_20_D.jpg,Imagen que NO es camiseta: objeto (agregar manualmente),Scores bajos; marcar Incorrecto,pendiente
