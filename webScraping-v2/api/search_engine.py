@@ -45,7 +45,7 @@ ids = None
 
 def cargar_indice():
     """
-    Carga los productos reales desde Sala 1 (webScraping-v2/data/productos.json) mediante conector_sala3.py
+    Carga los productos reales desde Sala 1 (webScraping-v2/data/products.csv) mediante conector_sala3.py
     y los embeddings de Sala 3.
     Lanza un ValueError descriptivo si la cantidad de productos no coincide con los embeddings.
     """
@@ -63,7 +63,7 @@ def cargar_indice():
     # Validar coincidencia de cantidad entre productos y embeddings
     if len(_df) != _embeddings.shape[0]:
         raise ValueError(
-            f"Desfase detectado: Hay {len(_df)} productos en productos.json (Sala 1) "
+            f"Desfase detectado: Hay {len(_df)} productos en products.csv (Sala 1) "
             f"pero {_embeddings.shape[0]} embeddings en embeddings.npy (Sala 3). "
             f"Pendiente actualización de embeddings por Sala 4."
         )
@@ -171,7 +171,7 @@ def info_indice() -> dict:
     if num_products != num_embeddings:
         info["desfase_detectado"] = True
         info["observacion"] = (
-            f"Desfase detectado: {num_products} productos en productos.json (Sala 1) vs "
+            f"Desfase detectado: {num_products} productos en products.csv (Sala 1) vs "
             f"{num_embeddings} embeddings en embeddings.npy (Sala 3). Pendiente entrega de Sala 4."
         )
 

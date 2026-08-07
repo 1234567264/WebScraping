@@ -17,7 +17,7 @@ PROVEEDOR_PREFIJO = "AIM"
 RUTA_JSON = os.path.join("data", "productos.json")
 RUTA_IMAGENES_ORIGEN = os.path.join("data", "images")
 RUTA_IMAGENES_DESTINO = os.path.join("data", "images_final")  # carpeta final a entregar
-RUTA_CSV_SALIDA = os.path.join("data", "consolidado.csv")
+RUTA_CSV_SALIDA = os.path.join("data", "products.csv")
  
 # ============================================================
 # 1. CARGA DE DATOS
@@ -155,7 +155,7 @@ def consolidar():
  
     for p in productos:
         numero = p.get("numero")
-        origen = indice_imagenes.get(numero)
+        origen = os.path.join(RUTA_IMAGENES_ORIGEN, p.get("imagen_original", ""))
  
         if not origen or not os.path.exists(origen):
             errores.append(f"[ARCHIVO FALTANTE] No se encontró imagen para el producto #{numero} ('{p['nombre_original']}').")

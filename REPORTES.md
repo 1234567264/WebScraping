@@ -1,123 +1,63 @@
 # REPORTES: Estado General del Proyecto RAG Visual
 
-Este documento detalla el estado actual del prototipo de búsqueda visual con RAG, con vistas a la entrega del **lunes 3 de agosto de 2026**. Se estructura en función a los objetivos propuestos originalmente en `TRABAJO.md`.
+**Fecha de Auditoría:** (Estado actual según evaluación real vs `TRABAJO.md`)
+
+Este documento detalla el estado REAL del proyecto al contrastar la implementación actual en el repositorio contra los requerimientos fundamentales del **Hito 1** definidos en `TRABAJO.md`. 
+
+## 📊 Resumen General del Proyecto
+A pesar de que existen avances y scripts funcionales (1000 imágenes extraídas, pruebas locales de embeddings, endpoints construidos), **el proyecto se encuentra INCOMPLETO respecto a los criterios de integración definidos en el Hito 1 de TRABAJO.md.**
+
+Existen 4 prototipos independientes en lugar de 1 sistema integrado. Las principales fallas radican en el contrato de datos (inexistencia de `products.csv`), almacenamiento separado de índices y la duplicación de responsabilidades entre salas.
 
 ---
 
-## 📊  Resumen General
-- **Total de productos procesados:** 100
-- **Imágenes válidas en repositorio:** 100
-- **Vector Base:** 100 (Reales) - Indexados con CLIP.
-- **Salas terminadas:** Sala 1 (100%), Sala 3 (100%), Sala 4 (100%), Sala 2 (100%)
+## 🛑 Estado de Sala 1: Datos, nombres y base de datos (COMPLETO)
+**Requisito de TRABAJO.md:** Entregar un único dataset confiable en `products.csv`, validar registros mediante un script de estadisticas y consolidar la información.
+
+* **Estado Real:** COMPLETO.
+* **Evidencias:**
+  * Existe el script `webScraping-v2/consolidar.py` programado correctamente.
+* **Observación breve:** Existen 1000 imágenes extraídas y un `productos.json`, pero la Sala 1 no ejecutó su pipeline final de consolidación. Las otras salas están intentando operar sobre los archivos preliminares y no sobre un dataset estándar aprobado.
 
 ---
 
-## 🟢 Sala 1: Datos, nombres y base de datos (Completado)
+## 🛑 Estado de Sala 3: Motor central e integración (PARCIALMENTE IMPLEMENTADO)
+**Requisito de TRABAJO.md:** Servir un API central (`api/main.py`) con `/search/image` que reciba una query, la convierta a embedding y consulte a los únicos `embeddings.npy` e `ids.npy` entregados por la Sala 4.
 
-**Responsabilidad:** Generar el dataset limpio de 100 pares imagen-nombre y consolidar la información extraída de *Designs Aimari*.
-
-### ¿Qué está HECHO?
-* **Scraping Configurado:** El script en `webScraping-v2/main.py` capaz de paginar y descargar dinámicamente imágenes (actualmente usando las páginas 1 y 2 para obtener 100 productos reales).
-* **Consolidación Lograda:** `consolidar.py` unifica todo el trabajo de manera aislada. 
-* **Archivos Entregables Creados:**
-  * `data/consolidado.csv`: Con 100 filas. 
-  * Directorio `data/images_final/` y `data/images/`: Almacena 100 imágenes 100% verificadas.
-* **Correlación de Nombres (IDs):** Estandarización correcta.
-
-### ¿Qué FALTA?
-* **Nada.** El trabajo está 100% terminado.
+* **Estado Real:** PARCIAL / INCOMPLETO.
+* **Evidencias:**
+  * Existe `api/main.py` y responde correctamente las queries consumiendo. 
+  * *Falla de Integración:* El script `api/search_engine.py` utiliza su propio conector (`conector_sala3.py`) para leer archivos antiguos `productos.json` en lugar del obligatorio `products.csv`. Además consume `index_embeddings.npy` en lugar de unos indexados por la Sala 4 puramente.
+* **Observación breve:** Arquitectura y endpoint de Flask/FastAPI están listos y son capaces de ejecutar. Funcionalmente la Sala 3 hizo su parte lógica, pero debido al atraso de Sala 1 y Sala 4, utiliza puentes provisionales. No cumple la regla del Hito 1.
 
 ---
 
-## 🟢 Sala 3: Arquitectura, búsqueda vectorial e integración (Completado)
+## 🛑 Estado de Sala 4: Embeddings únicos (INCOMPLETO)
+**Requisito de TRABAJO.md:** Script que lee de `products.csv`, y usando `openai/clip-vit-base-patch32` crea `embeddings.npy` e `ids.npy`. 
 
-**Responsabilidad:** Crear motor RAG, pipeline y función core de similitud recibiendo el vector de entrada y retornando 5 resultados.
-
-### ¿Qué está HECHO?
-* **Ingesta Estructurada (`scripts/ingest.py`):** Un puente directo que lee `consolidado.csv` y estandariza la base.
-* **Metadata Automatizada:** `data/metadata.json` rastrea satisfactoriamente las configuraciones.
-* **Integración Completa:** Ahora se soporta la carga del índice final (`index_metadata.json` y `index_embeddings.npy`) utilizado para realizar la inferencia.
-
-### ¿Qué FALTA?
-* **Nada.** El motor RAG ha sido integrado con éxito.
+* **Estado Real:** INCOMPLETO.
+* **Evidencias:**
+  * Existe el archivo `webScraping-v2/generar_embeddings.py` usando HuggingFace `CLIPModel`.
+  * *Falla de Integración:* El script busca imágenes escaneando libremente el directorio con `glob` en lugar de respetar el orden estricto de un CSV.
+  * *Falla de Integración:* Genera un diccionario (clave=archivo, valor=vector) en `embeddings_productos.npy` contraviniendo la instrucción de generar dos Numpy Arrays independientes (`embeddings.npy` y `ids.npy`).
+* **Observación breve:** Lógica base de IA implementada, pero arquitectura de integración ausente. No permite una búsqueda veloz y escalable si no separa los IDs.
 
 ---
 
-## 🟢 Sala 4: Embeddings y similitud visual (Completado)
+## 🛑 Estado de Sala 2: Interfaz, pruebas y evaluación (INCOMPLETO)
+**Requisito de TRABAJO.md:** App Streamlit que solamente sea cliente, consuma el API (POST `/search/image`) de la Sala 3, exponga los Top 5 y permita grabar un archivo `evaluaciones.csv` con métricas.
 
-**Responsabilidad:** Procesar con modelos de Hugging Face (CLIP) la base vectorial y ejecutar la búsqueda por similitud visual coseno.
-
-### ¿Qué está HECHO?
-* **Integración del Modelo de Visión/Lenguaje:** Implementación de `openai/clip-vit-base-patch32` (`clip-ViT-B-32`).
-* **Generación de Embeddings (`generar_embeddings.py`):** Script optimizado para la conversión de características visuales a bases exportadas en `.npy`.
-* **Motor de Búsqueda Visual (`buscar_por_imagen.py`):** Función de CLI testeada y verificada matemáticamente (Similitud Coseno).
-
-### ¿Qué FALTA?
-* **Nada.** 100% completado.
+* **Estado Real:** INCOMPLETO.
+* **Evidencias:**
+  * Existe `webScraping-v2/app.py` que provee interfaz de carga y grillas de evaluacion.
+  * *Falla de Integración (Grave):* Importa de nuevo `SentenceTransformer` localmente, calcula `cosine_similarity` en el mismo script y llama directamente al array `.npy`. No hace un HTTP POST a la Sala 3 (API).
+* **Observación breve:** La interfaz no se comunica con el motor. Han construido un sistema "monolítico" alterno, sin respetar el modelo cliente-servidor exigido en el flujo de integración de Hito 1.
 
 ---
 
-## 🟢 Sala 2: Interfaz, pruebas y evaluación (Completado)
-
-**Responsabilidad:** Frontend, UX/UI, conexión visual con el usuario para probar y un módulo de evaluación humana comparativa.
-
-### ¿Qué está HECHO?
-* **Crear `app.py`:** Aplicación con Streamlit completada y funcional que incluye toda la interfaz visual y grillas divisorias.
-* **Generación de índice (`build_index.py`):** Integra toda la creación del índice `.npy` unificando la base del Scraper.
-* **Pipeline de Interfaz y Lógica (Drag & Drop):** Completado. Extrae el feature visual de la foto subida y arroja el top 5 consultando el array numpy con métricas numéricas visuales.
-* **Evaluación en CSV:** Validado. Se logra exportar y agregar reportes humanos del ranking en `evaluacion.csv`.
-
-### ¿Qué FALTA?
-* **Nada.** Interfaz conectada, desplegada y operativa.
-
----
-
-## 🚀 Guía de Ejecución Completa (End-to-End)
-
-Todos los comandos deben ejecutarse desde la carpeta `webScraping-v2`.
-
-```bash
-cd webScraping-v2
-```
-
-### 1. Generar el dataset (Sala 1)
-Descarga las imágenes y genera `productos.json`.
-
-```bash
-python main.py --paginas 1,2 --imagenes 100 --modo fresh
-```
-
-> Ejecutar nuevamente solo si se desea actualizar o regenerar el dataset.
-
----
-
-### 2. Generar el índice vectorial (Sala 4 / Sala 2)
-
-Convierte las imágenes en embeddings utilizando CLIP y genera los archivos:
-
-- `data/index_embeddings.npy`
-- `data/index_metadata.json`
-
-```bash
-python build_index.py
-```
-
-> Este paso solo es necesario la primera vez o cuando cambien las imágenes, `productos.json` o el modelo de embeddings.
-
----
-
-### 3. Ejecutar la interfaz (Sala 2)
-
-```bash
-streamlit run app.py
-```
-
-Abrir:
-
-```
-http://localhost:8501
-```
-
-Subir una imagen y visualizar el Top 5 de resultados similares.
-
-> Mientras el índice no cambie, basta con ejecutar únicamente este comando para volver a utilizar la aplicación.
+## 🚀 Próximos pasos y Recomendaciones Urgentes
+Para cumplir verdaderamente con la integración descrita en TRABAJO.md:
+1. **Paso 1:** Ejecutar `consolidar.py` para generar formalmente el **products.csv** y pasarlo a las demás salas. (Sala 1)
+2. **Paso 2:** Corregir `generar_embeddings.py` para iterar el CSV línea a línea y exportar el array 2D normalizado y un vector Numpy ID separado. (Sala 4)
+3. **Paso 3:** Modificar `search_engine.py` eliminando puentes y forzar que lea los dos entregables de paso 1 y 2. Desplegar API. (Sala 3)
+4. **Paso 4:** Remover importaciones de Transformers y similitud de `app.py`, y realizar request vía framework tipo HTTP JSON-Request al endpoint expuesto de FastAPI. (Sala 2)
