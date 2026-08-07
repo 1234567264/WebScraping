@@ -1,74 +1,213 @@
-import sys
+# -*- coding: utf-8 -*-
+"""
+buscar_por_imagen.py
+--------------------
+SALA 4 - Hito 1: Búsqueda visual por similitud de embeddings.
+
+Carga el índice único generado por `generar_embeddings.py`
+(data/embeddings.npy + data/ids.npy), genera el embedding de la imagen de
+consulta con `openai/clip-vit-base-patch32` y devuelve los 5 productos más
+cercanos en el espacio vectorial del modelo.
+
+Sobre el "score de similitud":
+-------------------------------
+El score es una medida de CERCANÍA MATEMÁTICA entre dos vectores dentro del
+espacio vectorial aprendido por el modelo CLIP (similitud coseno, rango de
+-1 a 1). NO es un porcentaje de coincidencia, ni una confianza, ni una
+probabilidad de que sea el mismo diseño. Un score alto indica que el modelo
+representa ambas imágenes de forma muy parecida; no garantiza que el diseño
+sea idéntico.
+
+Uso:
+    python buscar_por_imagen.py <imagen> [<imagen2> ...]
+
+Pruebas con imágenes EXTERNAS (fuera de la biblioteca base), con las 3
+categorías pedidas: muy parecida, colores diferentes y no relacionada:
+
+    python buscar_por_imagen.py --test-externo \
+        test/muy_parecida.jpg \
+        test/colores_diferentes.jpg \
+        test/no_relacionada.jpg
+"""
+
+import argparse
 import os
+import sys
+import time
+
 import numpy as np
 import torch
 from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
+from transformers import CLIPModel, CLIPProcessor
 
-# --- CONFIGURACIÓN DE RUTAS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-EMBEDDINGS_FILE = os.path.join(BASE_DIR, "data", "embeddings_productos.npy")
+DATA_DIR = os.path.join(BASE_DIR, "data")
+EMBEDDINGS_PATH = os.path.join(DATA_DIR, "embeddings.npy")
+IDS_PATH = os.path.join(DATA_DIR, "ids.npy")
+
 MODEL_NAME = "openai/clip-vit-base-patch32"
+TOP_K = 5
 
-def buscar_similares(image_path, top_k=5):
-    if not os.path.exists(EMBEDDINGS_FILE):
-        print(f"\n❌ Error: No se encontró el archivo de vectores: {EMBEDDINGS_FILE}")
-        print("💡 Ejecuta primero: python generar_embeddings.py\n")
-        return
+_model = None
+_processor = None
+_embeddings = None
+_ids = None
+_nombres_imagenes = {}
 
-    if not os.path.exists(image_path):
-        print(f"\n❌ Error: La imagen especificada no existe: {image_path}\n")
-        return
+EXPLICACION_SCORE = (
+    "El score de similitud mide la cercanía matemática entre dos vectores en el "
+    "espacio vectorial del modelo CLIP (similitud coseno). No es un porcentaje "
+    "de coincidencia ni una probabilidad de que sea el mismo diseño."
+)
 
-    # 1. Cargar el diccionario de embeddings guardado
-    data = np.load(EMBEDDINGS_FILE, allow_pickle=True).item()
-    
-    # 2. Cargar modelo CLIP
-    print("🤖 Cargando modelo CLIP para la consulta...")
-    model = CLIPModel.from_pretrained(MODEL_NAME)
-    processor = CLIPProcessor.from_pretrained(MODEL_NAME)
-    model.eval()
 
-    # 3. Generar el embedding de la imagen de prueba
-    image = Image.open(image_path).convert("RGB")
-    inputs = processor(images=image, return_tensors="pt")
+def get_model():
+    global _model, _processor
+    if _model is None:
+        _model = CLIPModel.from_pretrained(MODEL_NAME)
+        _processor = CLIPProcessor.from_pretrained(MODEL_NAME)
+        _model.eval()
+    return _model, _processor
 
+
+def cargar_indice():
+    global _embeddings, _ids, _nombres_imagenes
+    if _embeddings is not None:
+        return _embeddings, _ids
+
+    if not os.path.exists(EMBEDDINGS_PATH):
+        print(f"Error: No se encontró el índice de embeddings en: {EMBEDDINGS_PATH}")
+        print("Ejecuta primero: python generar_embeddings.py")
+        sys.exit(1)
+
+    if not os.path.exists(IDS_PATH):
+        print(f"Error: No se encontró el archivo de IDs en: {IDS_PATH}")
+        print("Ejecuta primero: python generar_embeddings.py")
+        sys.exit(1)
+
+    _embeddings = np.load(EMBEDDINGS_PATH).astype(np.float32)
+    _ids = np.load(IDS_PATH, allow_pickle=True)
+
+    if _embeddings.shape[0] != len(_ids):
+        print(
+            f"Error de correspondencia: {_embeddings.shape[0]} embeddings vs "
+            f"{len(_ids)} IDs. Regenera el índice con generar_embeddings.py"
+        )
+        sys.exit(1)
+
+    csv_path = os.path.join(DATA_DIR, "products.csv")
+    if os.path.exists(csv_path):
+        import csv as csv_mod
+        with open(csv_path, "r", encoding="utf-8") as f:
+            for fila in csv_mod.DictReader(f):
+                _nombres_imagenes[fila["id"]] = fila["imagen"]
+
+    return _embeddings, _ids
+
+
+def generar_embedding(ruta_imagen):
+    """Genera el embedding normalizado L2 de una imagen."""
+    model, processor = get_model()
+    imagen = Image.open(ruta_imagen).convert("RGB")
+    inputs = processor(images=imagen, return_tensors="pt")
     with torch.no_grad():
-        # Usamos get_image_features directamente para obtener el tensor correcto
         features = model.get_image_features(**inputs)
-        
-        # Si devuelve un objeto estructurado, extraemos el tensor de embeddings
-        if hasattr(features, 'image_embeds'):
-            features = features.image_embeds
-        elif hasattr(features, 'pooler_output'):
-            features = features.pooler_output
+    if hasattr(features, "pooler_output"):
+        features = features.pooler_output
+    elif hasattr(features, "image_embeds"):
+        features = features.image_embeds
+    features = features / features.norm(p=2, dim=-1, keepdim=True)
+    return features.cpu().numpy().flatten().astype(np.float32)
 
-        # Normalizar vector de consulta
-        query_vector = (features / features.norm(p=2, dim=-1, keepdim=True)).cpu().numpy().flatten()
 
-    # 4. Calcular similitud coseno con todas las imágenes
+def buscar_similares(ruta_imagen, top_k=TOP_K):
+    """Devuelve los top_k productos más similares: [{id, imagen, score}, ...]."""
+    embeddings, ids = cargar_indice()
+    vector = generar_embedding(ruta_imagen)
+
+    scores = np.dot(embeddings, vector)
+    top_indices = np.argsort(scores)[::-1][:top_k]
+
     resultados = []
-    for filename, embedding in data.items():
-        # Normalizar el embedding guardado por seguridad
-        emb_norm = embedding / np.linalg.norm(embedding)
-        similarity = np.dot(query_vector, emb_norm)
-        resultados.append((filename, similarity))
+    for idx in top_indices:
+        product_id = str(ids[idx])
+        resultados.append({
+            "id": product_id,
+            "imagen": _nombres_imagenes.get(product_id, f"{product_id} (sin archivo)"),
+            "score": round(float(scores[idx]), 4),
+        })
+    return resultados
 
-    # Ordenar de mayor a menor similitud
-    resultados.sort(key=lambda x: x[1], reverse=True)
 
-    # 5. Mostrar TOP K
-    print(f"\n--- 🎯 TOP {top_k} RESULTADOS VISUALES ---")
-    for rank, (filename, sim) in enumerate(resultados[:top_k], 1):
-        porcentaje = max(0.0, sim) * 100
-        # Extraer solo el nombre base del archivo para mayor claridad
-        nombre_limpio = os.path.basename(filename)
-        print(f"{rank}. {nombre_limpio} | Similitud: {porcentaje:.2f}%")
+def mostrar_resultados(ruta_imagen, resultados):
+    nombre = os.path.basename(ruta_imagen)
+    print(f"\n--- Top {len(resultados)} para '{nombre}' ---")
+    for rank, r in enumerate(resultados, 1):
+        print(f"{rank}. {r['id']} ({r['imagen']}) | score de similitud: {r['score']:.4f}")
+
+
+def test_externo(rutas):
+    """Prueba con imágenes externas: muy parecida, colores diferentes, no relacionada."""
+    if len(rutas) < 3:
+        print("El modo --test-externo requiere al menos 3 imágenes:")
+        print("  1) muy parecida   2) colores diferentes   3) no relacionada")
+        sys.exit(1)
+
+    etiquetas = [
+        "Muy parecida (fuera de la biblioteca)",
+        "Colores diferentes",
+        "No relacionada",
+    ]
+
+    print(EXPLICACION_SCORE)
+    print(f"\n=== PRUEBA CON IMÁGENES EXTERNAS ({len(rutas)} consultas) ===")
+
+    inicio = time.perf_counter()
+    for etiqueta, ruta in zip(etiquetas, rutas):
+        if not os.path.exists(ruta):
+            print(f"\n[SKIP] No existe la imagen: {ruta}")
+            continue
+        print(f"\n>>> {etiqueta}: {os.path.basename(ruta)}")
+        t0 = time.perf_counter()
+        resultados = buscar_similares(ruta)
+        mostrar_resultados(ruta, resultados)
+        print(f"    Tiempo de consulta: {time.perf_counter() - t0:.2f}s")
+
+    print(f"\nTiempo total de procesamiento (pruebas externas): {time.perf_counter() - inicio:.2f}s")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Búsqueda visual por similitud de embeddings (Sala 4)."
+    )
+    parser.add_argument(
+        "imagenes",
+        nargs="+",
+        help="Una o más imágenes a consultar.",
+    )
+    parser.add_argument(
+        "--test-externo",
+        action="store_true",
+        help="Prueba con imágenes externas (muy parecida, colores diferentes, no relacionada).",
+    )
+    args = parser.parse_args()
+
+    print(f"Modelo: {MODEL_NAME}")
+
+    if args.test_externo:
+        test_externo(args.imagenes)
+        return
+
+    print(EXPLICACION_SCORE)
+    inicio = time.perf_counter()
+    for ruta in args.imagenes:
+        if not os.path.exists(ruta):
+            print(f"Error: La imagen no existe: {ruta}")
+            continue
+        resultados = buscar_similares(ruta)
+        mostrar_resultados(ruta, resultados)
+    print(f"\nTiempo total de procesamiento: {time.perf_counter() - inicio:.2f}s")
+
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Uso: python buscar_por_imagen.py <ruta_de_la_imagen>")
-    else:
-        ruta_img = sys.argv[1]
-        print(f"🔍 Buscando los 5 productos más parecidos a '{ruta_img}'...")
-        buscar_similares(ruta_img, top_k=5)
+    main()
