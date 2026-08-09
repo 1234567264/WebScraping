@@ -1187,3 +1187,521 @@ La frase de validación será:
 
 > “Una imagen se carga una sola vez, se procesa con un solo modelo, se compara contra un solo índice y los resultados se muestran en una sola interfaz.”
 
+# **HITO 2 — Búsqueda visual robusta de camisetas 8/08/2026 Hasta 11/08/2026**
+
+## **Visión**
+
+Construir una versión mejorada del buscador visual capaz de identificar una camiseta aunque la imagen consultada sea diferente a la imagen original del banco: sin marco, con otros colores, recortada, en mockup o sobre una persona; además, el sistema debe devolver un Top 5 visualmente coherente y útil para una persona, no solamente los vectores matemáticamente más cercanos.
+
+## **Problemas detectados en el Hito 1**
+
+El sistema actual funciona técnicamente, pero presenta tres problemas:
+
+* Encuentra muy bien una imagen cuando la consulta es prácticamente igual a la imagen almacenada.  
+* Cuando se elimina el marco o cambia la composición, puede dejar de encontrar el mismo diseño.  
+* Los resultados Top 2, 3, 4 y 5 muchas veces no parecen realmente similares según criterio humano.
+
+El Hito 2 debe resolver esos problemas.
+
+## **Duración**
+
+Desde sábado hasta martes.
+
+## **Resultado esperado**
+
+Al finalizar, el sistema deberá aceptar distintos tipos de consulta:
+
+* imagen original del banco;  
+* misma camiseta sin marco;  
+* misma camiseta con colores modificados;  
+* camiseta recortada;  
+* mockup;  
+* persona usando la camiseta;  
+* vista parcial o con cierta perspectiva.
+
+Y deberá devolver un Top 5 donde los resultados tengan una relación visual razonable con la camiseta consultada.
+
+---
+
+# **SALA 1 — Normalización automática del banco de imágenes**
+
+## **Objetivo**
+
+Crear un proceso automático que transforme las imágenes actuales del catálogo en imágenes limpias y estandarizadas, reduciendo la influencia de marcos, textos, URLs, fondos y otros elementos ajenos al diseño de la camiseta.
+
+## **Actividades**
+
+### **1\. Analizar el banco actual**
+
+Tomar una muestra mínima de 100 imágenes y determinar:
+
+* cuántos formatos visuales diferentes existen;  
+* si los marcos aparecen siempre en posiciones similares;  
+* dónde aparecen cabecera, pie y URL;  
+* dónde se ubican normalmente frente y espalda;  
+* qué porcentaje puede recortarse mediante reglas simples.
+
+### **2\. Crear un script de normalización**
+
+El script debe intentar automáticamente:
+
+* eliminar cabecera;  
+* eliminar pie;  
+* quitar bordes;  
+* eliminar zonas con URL o textos externos;  
+* recortar la zona donde se encuentran las camisetas;  
+* conservar frente y espalda;  
+* guardar el resultado sobre un lienzo uniforme.
+
+No deben modificar ni borrar las imágenes originales.
+
+Debe existir:
+
+`data/images_original/`
+
+y:
+
+`data/images_normalized/`
+
+### **3\. Mantener correspondencia de IDs**
+
+Una imagen:
+
+`AIM-P001-001.jpg`
+
+debe producir:
+
+`AIM-P001-001.jpg`
+
+en la carpeta normalizada.
+
+### **4\. Procesar inicialmente 1.000 imágenes**
+
+Deben informar:
+
+* procesadas correctamente;  
+* fallidas;  
+* recorte correcto;  
+* recorte incorrecto;  
+* tiempo total;  
+* tiempo promedio por imagen.
+
+### **5\. Validación humana**
+
+Seleccionar 50 imágenes normalizadas al azar y revisar visualmente si la camiseta quedó correctamente conservada.
+
+## **Entregable Sala 1**
+
+* Script de normalización.  
+* 1.000 imágenes normalizadas.  
+* Informe de formatos encontrados.  
+* Resultados de las 50 revisiones humanas.  
+* Lista de casos que el algoritmo no puede resolver correctamente.
+
+## **Pregunta principal que deben responder**
+
+> ¿Podemos convertir automáticamente miles de imágenes heterogéneas en una representación visual uniforme de la camiseta?
+
+---
+
+# **SALA 2 — Consulta desde imágenes reales y preparación de la imagen**
+
+## **Objetivo**
+
+Construir el módulo que prepare correctamente la imagen que entrega el usuario antes de enviarla al buscador.
+
+Esta sala trabajará el problema contrario al de Sala 1:
+
+* Sala 1 limpia las imágenes del banco.  
+* Sala 2 limpia y prepara la imagen que llega como consulta.
+
+## **Casos que deben soportar**
+
+Probar como mínimo:
+
+1. camiseta limpia;  
+2. camiseta sin marco;  
+3. camiseta con fondo;  
+4. mockup;  
+5. persona usando camiseta;  
+6. camiseta recortada;  
+7. solo parte del frente;  
+8. color modificado;  
+9. camiseta ligeramente girada;  
+10. imagen de baja calidad.
+
+### **1\. Detectar la región de interés**
+
+Investigar e implementar una estrategia para encontrar principalmente la camiseta dentro de la imagen.
+
+Pueden explorar:
+
+* OpenCV;  
+* segmentación;  
+* detección de objetos;  
+* YOLO;  
+* SAM u otras herramientas adecuadas.
+
+No es obligatorio que una sola tecnología resuelva todos los casos.
+
+### **2\. Eliminar información irrelevante**
+
+Cuando sea posible:
+
+* quitar fondo;  
+* reducir presencia de la persona;  
+* recortar la camiseta;  
+* centrarla;  
+* ajustar dimensiones;  
+* mantener la mayor cantidad posible del patrón.
+
+### **3\. Crear flujo automático**
+
+Entrada:
+
+imagen del usuario.
+
+Salida:
+
+imagen preparada para generar embedding.
+
+Ejemplo conceptual:
+
+Foto persona → detección camiseta → recorte → normalización → búsqueda.
+
+### **4\. Conectar con la API**
+
+La interfaz debe enviar al motor:
+
+* imagen original;  
+* o imagen procesada,
+
+según el resultado del preprocesamiento.
+
+### **5\. Guardar ambas versiones**
+
+Para poder comparar resultados:
+
+* consulta original;  
+* consulta procesada.
+
+## **Entregable Sala 2**
+
+* Módulo de preparación de consultas.  
+* Integración con interfaz.  
+* Mínimo 30 consultas reales.  
+* Ejemplos antes/después.  
+* Lista de casos que funcionan y casos que fallan.
+
+## **Pregunta principal que deben responder**
+
+> ¿Podemos transformar una foto real, mockup o imagen parcial en una consulta suficientemente limpia para encontrar su diseño dentro del banco?
+
+---
+
+# **SALA 4 — Comparación de modelos y embeddings**
+
+## **Objetivo**
+
+Determinar qué modelo representa mejor la similitud visual relevante para camisetas deportivas.
+
+No deben asumir que CLIP actual es el modelo definitivo.
+
+## **Modelos mínimos a comparar**
+
+* CLIP actual.  
+* OpenCLIP.  
+* SigLIP.
+
+Pueden agregar otro modelo si justifican su uso.
+
+### **1\. Crear tres índices**
+
+Usar exactamente las mismas imágenes normalizadas para generar tres conjuntos de embeddings.
+
+Ejemplo:
+
+* embeddings\_clip.npy  
+* embeddings\_openclip.npy  
+* embeddings\_siglip.npy
+
+### **2\. Utilizar las mismas consultas**
+
+Todos los modelos deben probarse contra exactamente las mismas imágenes.
+
+### **3\. Crear conjunto de prueba**
+
+Mínimo:
+
+* 10 imágenes exactas;  
+* 10 sin marco;  
+* 10 recoloreadas;  
+* 10 recortadas;  
+* 10 mockups/personas.
+
+Total mínimo: 50 consultas.
+
+### **4\. Medir Top 1 y Top 5**
+
+Para cada modelo:
+
+* ¿encontró el diseño correcto en Top 1?  
+* ¿apareció dentro del Top 5?  
+* ¿qué tan coherentes fueron Top 2–5?
+
+### **5\. Evaluación humana**
+
+El score matemático no será suficiente.
+
+Una persona debe revisar si:
+
+* el patrón realmente se parece;  
+* la estructura del diseño es similar;  
+* los resultados Top 2–5 son útiles.
+
+### **6\. Elegir modelo ganador**
+
+La sala debe concluir con evidencia:
+
+> Para nuestro banco de camisetas, el mejor modelo es X porque obtuvo Y resultados correctos.
+
+No se acepta elegir un modelo solamente porque “es más nuevo”.
+
+## **Entregable Sala 4**
+
+* Tres índices.  
+* Tabla comparativa.  
+* 50 consultas.  
+* Precisión Top 1\.  
+* Precisión Top 5\.  
+* Evaluación humana.  
+* Tiempo de generación.  
+* Tiempo de búsqueda.  
+* Modelo recomendado.
+
+## **Pregunta principal que deben responder**
+
+> ¿Qué modelo entiende mejor la similitud que a nosotros realmente nos importa?
+
+---
+
+# **SALA 3 — Motor mejorado y reranking del Top 5**
+
+## **Objetivo**
+
+Evitar que el sistema devuelva Top 2, 3, 4 y 5 visualmente irrelevantes.
+
+El motor ya no debe limitarse a tomar directamente los primeros cinco embeddings más cercanos.
+
+## **Actividades**
+
+### **1\. Recuperación inicial amplia**
+
+En lugar de obtener directamente Top 5:
+
+buscar primero:
+
+* Top 20;  
+* Top 30;  
+* o Top 50\.
+
+### **2\. Crear etapa de reranking**
+
+Esos candidatos deben volver a compararse utilizando criterios más estrictos.
+
+Investigar diferentes combinaciones:
+
+* score del embedding;  
+* similitud estructural;  
+* color;  
+* geometría;  
+* distribución del patrón;  
+* similitud frente/espalda;  
+* segundo modelo visual.
+
+### **3\. Comparación por regiones**
+
+Evaluar si mejora el resultado utilizando:
+
+* imagen completa;  
+* frente;  
+* espalda;  
+* ambas vistas por separado.
+
+Ejemplo conceptual:
+
+Score final \=  
+similitud global \+  
+similitud frente \+  
+similitud espalda.
+
+Los pesos deben probarse, no asumirse.
+
+### **4\. Permitir umbral mínimo**
+
+Si solamente existen dos diseños razonablemente similares, el motor no debe fingir que existen cinco buenos resultados.
+
+Debe poder devolver:
+
+* 1 resultado;  
+* 3 resultados;  
+* 5 resultados;
+
+dependiendo de la calidad.
+
+### **5\. Mejorar respuesta de API**
+
+`POST /search/image`
+
+Debe poder devolver información adicional:
+
+* score inicial;  
+* score de reranking;  
+* posición final;  
+* modelo utilizado.
+
+### **6\. Medir mejora**
+
+Comparar:
+
+**Motor Hito 1 vs Motor Hito 2\.**
+
+Usar las mismas consultas.
+
+La pregunta es:
+
+> ¿El nuevo Top 5 es realmente mejor?
+
+## **Entregable Sala 3**
+
+* Motor con recuperación amplia.  
+* Reranking.  
+* API integrada.  
+* Comparación Hito 1 vs Hito 2\.  
+* Medición de tiempos.  
+* Evidencia de mejora en Top 5\.
+
+## **Pregunta principal que deben responder**
+
+> ¿Podemos conseguir que los cinco resultados finales tengan sentido visual para una persona y no solamente matemático?
+
+---
+
+# **Pruebas obligatorias para TODAS las salas**
+
+Cada sala debe probar su propio módulo.
+
+Además, al final deben realizar una prueba integrada común.
+
+Utilizar mínimo 50 consultas divididas así:
+
+* 10 exactas;  
+* 10 sin marco;  
+* 10 recoloreadas;  
+* 10 recortadas o modificadas;  
+* 10 mockups/personas.
+
+Cada consulta debe tener previamente identificado cuál es el diseño correcto.
+
+---
+
+# **Métricas finales**
+
+Se deben reportar como mínimo:
+
+### **Top 1 exactitud**
+
+Cuántas veces el diseño correcto quedó primero.
+
+### **Top 5 recuperación**
+
+Cuántas veces el diseño correcto apareció en cualquiera de las primeras cinco posiciones.
+
+### **Calidad Top 5 humana**
+
+Una persona clasificará cada resultado:
+
+* Muy similar.  
+* Similar.  
+* Poco similar.  
+* No relacionado.
+
+Esto es especialmente importante porque el problema detectado en Hito 1 fue que Top 2–5 podían ser matemáticamente cercanos pero visualmente inútiles.
+
+---
+
+# **Comparación obligatoria Hito 1 vs Hito 2**
+
+Deben seleccionar las mismas consultas problemáticas que fallaron actualmente.
+
+Ejemplo:
+
+### **Caso A**
+
+Imagen original con marco.
+
+Hito 1:  
+Top 1 correcto.
+
+Hito 2:  
+Top 1 correcto.
+
+### **Caso B**
+
+Misma camiseta sin marco.
+
+Hito 1:  
+No aparece correctamente.
+
+Hito 2:  
+Debe mejorar.
+
+### **Caso C**
+
+Misma camiseta con colores cambiados.
+
+Comparar ambos motores.
+
+### **Caso D**
+
+Foto/mockup.
+
+Comparar ambos motores.
+
+### **Caso E**
+
+Top 2–5 irrelevantes.
+
+Comparar visualmente si el nuevo Top 5 mejora.
+
+---
+
+# **Resultado esperado del Hito 2**
+
+El Hito 2 será considerado exitoso si pueden demostrar:
+
+> Una camiseta puede ser encontrada aunque la consulta no sea idéntica a la imagen almacenada y, además, los resultados alternativos del Top 5 presentan similitud visual razonable.
+
+No es obligatorio todavía resolver perfectamente todos los casos de personas de costado, grandes oclusiones o fotografías extremadamente difíciles.
+
+Lo importante es demostrar una **mejora objetiva y visible respecto al Hito 1**.
+
+# **Informe final por sala**
+
+Cada informe deberá incluir solamente:
+
+**1\. Objetivo asignado.**  
+**2\. Qué implementaron.**  
+**3\. Qué integrante hizo cada parte.**  
+**4\. Qué pruebas realizaron.**  
+**5\. Resultados numéricos.**  
+**6\. Evidencia visual antes/después.**  
+**7\. Qué funcionó.**  
+**8\. Qué falló.**  
+**9\. Qué mejorarían.**  
+**10\. Qué código puede explicar individualmente cada integrante.**
+
+Además:
+
+> **No se considerará suficiente afirmar “funciona”. Deben demostrar cuánto mejoró frente al Hito 1\.**
+
