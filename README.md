@@ -11,6 +11,8 @@ Plataforma de búsqueda visual de camisetas deportivas basada en **embeddings CL
                 │
 [consolidar.py] → data/products.csv + data/images_final/   (Sala 1)
                 │
+[normalizar_imagenes.py] → data/images_normalized/   (Sala 1, Hito 2)
+                │
 [generar_embeddings.py] → data/embeddings.npy + data/ids.npy   (Sala 4)
                 │
 [FastAPI api/main.py] → POST /search/image + GET /health   (Sala 3)
@@ -129,6 +131,25 @@ Abre `http://localhost:8501` en el navegador:
 3. Revisa el Top 5 (imagen, ID, nombre, proveedor, URL, score).
 4. Clasifica cada resultado (**Correcto / Útil, pero no duplicado / Incorrecto**) y guarda la evaluación → `data/evaluation.csv`.
 
+### 7. Normalizar el banco de imágenes (Sala 1 — Hito 2)
+
+Transforma las tarjetas del catálogo en imágenes limpias y estandarizadas (solo frente + espalda, sin cabecera, pie/URL, marcos ni logos), sin tocar las originales:
+
+```bash
+# a) Analizar formatos del banco (Actividad 1, muestra >= 100)
+python scripts/analizar_formatos.py                 # → data/informe_formatos.txt
+# b) Normalizar las 1000 imágenes (Actividad 2-4)
+python scripts/normalizar_imagenes.py               # → data/images_normalized/
+# c) Revisión objetiva de la muestra de 50 (Actividad 5)
+python scripts/revisar_muestra_50.py                # → data/revision_humana_50.csv
+```
+
+Genera:
+- `data/images_normalized/` — 1000 imágenes `AIM-Pxxx-NNN.jpg` (mismo ID que `images_final/`).
+- `data/informe_normalizacion.txt` + `data/detalle_normalizacion.csv` — procesadas/fallidas, recortes correctos/incorrectos, tiempos y casos a revisar.
+- `data/informe_formatos.txt` + `data/detalle_formatos.csv` — formatos visuales, posición de marcos/cabecera/pie/URL, ubicación de frente y espalda, % recortable.
+- `data/revision_humana_50.csv` + `data/revision_contact_sheet.png` — muestra aleatoria de 50 con clasificación y hoja de contacto para el visto bueno visual.
+
 ## Evaluación de las 20 pruebas (Sala 2)
 
 El plan está en `evaluation/test_plan.csv` (grupos A–D) y las imágenes de consulta en `evaluation/test_images/`.
@@ -152,12 +173,20 @@ WebScraping/
 ├── data/
 │   ├── images/          # Imágenes crudas del scraping (fuente, legacy)
 │   ├── images_final/    # Imágenes con ID uniforme (entregable Sala 1)
+│   ├── images_normalized/ # Imágenes normalizadas frente+espalda (Sala 1, Hito 2)
 │   ├── products.csv     # Dataset canónico
 │   ├── embeddings.npy   # Vectores CLIP (Sala 4)
 │   ├── ids.npy          # IDs alineados con embeddings
 │   ├── evaluation.csv   # Resultado de las 20 pruebas (Sala 2)
-│   └── tiempos.csv      # Tiempo por consulta
-├── scripts/             # consolidar, validar, embeddings, evaluación, reportes
+│   ├── tiempos.csv      # Tiempo por consulta
+│   ├── informe_normalizacion.txt  # Resultados de la normalización (Sala 1)
+│   ├── detalle_normalizacion.csv  # Estado por imagen (Sala 1)
+│   ├── informe_formatos.txt       # Análisis de formatos del banco (Sala 1)
+│   ├── detalle_formatos.csv       # Estructura por imagen (Sala 1)
+│   ├── revision_humana_50.csv     # Clasificación de la muestra de 50 (Sala 1)
+│   ├── informe_revision_humana.txt # Resultados de las 50 revisiones (Sala 1)
+│   └── revision_contact_sheet.png # Hoja de contacto original|normalizada (Sala 1)
+├── scripts/             # consolidar, validar, normalizar, analizar formatos, embeddings, evaluación, reportes
 ├── scraper/             # Engine de scraping (main.py lo usa)
 ├── utils/               # helpers, pagination, limits, update
 ├── storage/             # exportación a Excel
@@ -179,6 +208,10 @@ WebScraping/
 | `data/ids.npy` | 1000 IDs en el mismo orden que los embeddings |
 | `data/evaluation.csv` | Evaluación de las 20 consultas (5 filas por consulta) |
 | `data/reporte_evaluacion.xlsx` | Resumen por consulta |
+| `data/images_normalized/` | 1000 imágenes normalizadas `AIM-Pxxx-NNN.jpg` (Sala 1, Hito 2) |
+| `data/informe_normalizacion.txt` | Estadísticas de la normalización (Sala 1, Hito 2) |
+| `data/informe_formatos.txt` | Análisis de formatos del banco (Sala 1, Hito 2) |
+| `data/revision_humana_50.csv` | Clasificación de las 50 revisiones (Sala 1, Hito 2) |
 
 > **Nota sobre archivos legacy:** `data/index_embeddings.npy` y `data/index_metadata.json` son de `scripts/build_index.py` (fuera del flujo integrado). El flujo del Hito 1 usa únicamente `embeddings.npy` + `ids.npy`.
 
