@@ -48,3 +48,34 @@ sin cabecera/pie, sin cortes, sin deformación, lienzo uniforme.
 cruzados con el estado del pipeline → **49/50 correctas (98%), 1 dudosa**
 (`AIM-P003-164`, espalda lisa indistinguible del fondo), 0 incorrectas.
 `data/informe_revision_humana.txt` + hoja de contacto para visto bueno visual final.
+
+## Fecha: 2026-08-10 (rama piloto, complemento Sala 3 / Hito 2)
+
+### Prompt 7 - Bug de rutas no-ASCII en el reranking del Hito 2
+**Propósito:** El motor de Sala 3 (`api/search_engine_hito2.py`) dejaba
+`score_color = 0` en todas las consultas: `cv2.imread` falla silenciosamente con
+rutas que contienen caracteres no-ASCII (p. ej. la carpeta `Imágenes` del perfil
+de Windows).
+**Resultado:** lectura de imágenes reemplazada por PIL (`Image.open` → BGR) en
+`_leer_bgr_desde_ruta` y `_a_imagen_bgr`. Verificado: el reranking por color
+ahora produce scores > 0 y el Top 1 es correcto en consultas exactas y sin marco.
+
+### Prompt 8 - Reranking por regiones y estructura
+**Propósito:** Complementar el reranking del Hito 2 con los criterios que pide
+TRABAJO.md: comparación por regiones (frente/espalda) y distribución del patrón,
+con pesos en constantes para calibrar (no asumidos).
+**Resultado:** `api/search_engine_hito2.py` ahora combina 5 señales: embedding CLIP
+(0,55) + color HSV global (0,15) + color frente (0,10) + color espalda (0,10) +
+estructura en grises 32×32 (0,10). Respuesta ampliada con `score_color_global`,
+`score_color_frente`, `score_color_espalda`, `score_estructura`, `score_reranking`,
+`posicion_final` y `modelo_utilizado`.
+
+### Prompt 9 - Comparación Hito 1 vs Hito 2 con evidencia
+**Propósito:** Medir objetivamente si el motor nuevo mejora al del Hito 1 usando
+las mismas consultas, con tiempos por consulta y evidencia guardada.
+**Resultado:** `scripts/compare_hito1_hito2.py` (lee `evaluation/consultas_hito2.csv`,
+mide Top 1/Top 5/tiempos, guarda `data/comparacion_hito1_hito2.csv` + `.json`) y
+`scripts/generar_consultas_prueba.py` (genera las 20 consultas derivables:
+10 exactas + 10 sin marco; documenta cómo agregar las 30 restantes).
+**Resultado real sobre 20 consultas:** Hito 1: Top1 80% / Top5 100% (2 294 ms);
+Hito 2: Top1 90% / Top5 95% (2 665 ms). En sin_marco el Top 1 sube de 6/10 a 8/10.

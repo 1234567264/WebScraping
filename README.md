@@ -111,7 +111,8 @@ python -m uvicorn api.main:app --port 8000
 Al iniciar carga el índice y el modelo CLIP una sola vez. Endpoints:
 
 - `GET /health` — estado, cantidad de productos/embeddings y modelo.
-- `POST /search/image` — recibe una imagen (multipart), genera su embedding y devuelve el **Top 5**: `{resultados: [{id, nombre, imagen, url, proveedor, score}...], tiempo_segundos}`.
+- `POST /search/image` — recibe una imagen (multipart), genera su embedding y devuelve el **Top 5**: `{resultados: [{id, nombre, imagen, url, proveedor, score}...], tiempo_segundos}` (Hito 1).
+- `POST /search/image/v2` — igual, pero con el **motor del Hito 2** (recuperación amplia + reranking por color/regiones/estructura + umbral dinámico). Cada resultado incluye `score_inicial`, `score_color_global`, `score_color_frente`, `score_color_espalda`, `score_estructura`, `score_reranking`, `posicion_final` y `modelo_utilizado`.
 
 Prueba rápida desde otra terminal:
 
@@ -150,6 +151,29 @@ Genera:
 - `data/informe_formatos.txt` + `data/detalle_formatos.csv` — formatos visuales, posición de marcos/cabecera/pie/URL, ubicación de frente y espalda, % recortable.
 - `data/revision_humana_50.csv` + `data/revision_contact_sheet.png` — muestra aleatoria de 50 con clasificación y hoja de contacto para el visto bueno visual.
 
+### 8. Motor mejorado y reranking del Top 5 (Sala 3 — Hito 2)
+
+El motor del Hito 1 (`POST /search/image`) sigue disponible para comparar. El motor del Hito 2 se expone en `POST /search/image/v2`: recuperación amplia (Top 30) + reranking combinando el score CLIP con color HSV global, color por regiones frente/espalda y estructura del patrón, más umbral dinámico (puede devolver 1, 3 o 5 resultados según la calidad):
+
+```bash
+python -m uvicorn api.main:app --port 8000
+# POST /search/image/v2 -> resultados con: score_inicial, score_color_global,
+#   score_color_frente, score_color_espalda, score_estructura, score_reranking,
+#   posicion_final, modelo_utilizado
+```
+
+**Prueba integrada común (50 consultas) y comparación Hito 1 vs Hito 2:**
+
+```bash
+# a) Generar las consultas derivables (10 exactas + 10 sin marco; las 30
+#    restantes las aportan Sala 4 y Sala 2 al mismo CSV)
+python scripts/generar_consultas_prueba.py        # → evaluation/consultas_hito2.csv
+# b) Con la API corriendo, comparar ambos motores con las mismas consultas
+python scripts/compare_hito1_hito2.py             # → data/comparacion_hito1_hito2.csv + .json
+```
+
+El comparador mide Top 1, Top 5 y tiempos por motor y por categoría. Resultados reales (20 consultas iniciales): Hito 2 mejora el Top 1 de 80% a 90% (ver `REPORTES_HITO2.md`).
+
 ## Evaluación de las 20 pruebas (Sala 2)
 
 El plan está en `evaluation/test_plan.csv` (grupos A–D) y las imágenes de consulta en `evaluation/test_images/`.
@@ -166,8 +190,9 @@ Genera `data/reporte_evaluacion.xlsx` y la tabla Consulta | Top 1 correcto | Top
 ```text
 WebScraping/
 ├── api/                 # FastAPI + motor de búsqueda (Sala 3)
-│   ├── main.py          #   endpoints /search/image y /health
-│   └── search_engine.py #   carga índice y search_similar(top_k=5)
+│   ├── main.py           #   endpoints /search/image (Hito 1), /search/image/v2 (Hito 2) y /health
+│   ├── search_engine.py  #   carga índice y search_similar(top_k=5) (Hito 1)
+│   └── search_engine_hito2.py # recuperación amplia + reranking (Hito 2, Sala 3)
 ├── frontend/
 │   └── app.py           # Interfaz Streamlit (Sala 2, cliente HTTP de la API)
 ├── data/
@@ -179,6 +204,8 @@ WebScraping/
 │   ├── ids.npy          # IDs alineados con embeddings
 │   ├── evaluation.csv   # Resultado de las 20 pruebas (Sala 2)
 │   ├── tiempos.csv      # Tiempo por consulta
+│   ├── comparacion_hito1_hito2.csv  # Comparación H1 vs H2 por consulta (Sala 3, Hito 2)
+│   ├── comparacion_hito1_hito2.json # Resumen Top 1/Top 5/tiempos (Sala 3, Hito 2)
 │   ├── informe_normalizacion.txt  # Resultados de la normalización (Sala 1)
 │   ├── detalle_normalizacion.csv  # Estado por imagen (Sala 1)
 │   ├── informe_formatos.txt       # Análisis de formatos del banco (Sala 1)
@@ -191,11 +218,12 @@ WebScraping/
 ├── utils/               # helpers, pagination, limits, update
 ├── storage/             # exportación a Excel
 ├── config/              # configuración del scraper
-├── evaluation/          # test_plan.csv + test_images/ (20 pruebas)
+├── evaluation/          # test_plan.csv + test_images/ (20 pruebas) + consultas_hito2.csv
 ├── requirements.txt     # Dependencias del proyecto
 ├── main.py              # Punto de entrada del scraper
 ├── TRABAJO.md           # Consigna oficial del proyecto
 ├── REPORTES.md          # Auditoría del estado vs TRABAJO.md
+├── REPORTES_HITO2.md    # Reporte del Hito 2 (Sala 1 y Sala 3 implementadas)
 └── README.md            # Este documento
 ```
 
