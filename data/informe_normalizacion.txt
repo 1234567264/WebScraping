@@ -1,0 +1,38 @@
+REPORTE DE NORMALIZACION - SALA 1 / HITO 2
+============================================================
+Total encontradas       : 1000
+Procesadas correctamente: 984
+Fallidas                : 0
+Dudosas (revisar)       : 16
+Recorte correcto        : 984
+Recorte incorrecto      : 16
+Frente detectado        : 1000
+Espalda detectada       : 986
+Integridad de salida    : OK (100% .jpg)
+Tiempo total            : 45.24 s
+Tiempo promedio         : 45.2 ms/imagen
+============================================================
+
+IMAGENES ATIPICAS (no siguen la estructura habitual):
+  AIM-P009-533.gif
+  AIM-P011-603.gif
+  AIM-P014-788.jpg
+  AIM-P015-896.png
+
+CASOS PARA REVISION HUMANA (dudosas + fallidas):
+  [DUDOSO] AIM-P003-139.jpg  ->  logo separado de bloque ancho x[15:116] | espalda no distinguible del fondo (revisar)
+  [DUDOSO] AIM-P003-164.jpg  ->  logo separado de bloque ancho x[92:704] | espalda no distinguible del fondo (revisar)
+  [DUDOSO] AIM-P005-261.jpg  ->  logo descartado x[15:125] | espalda no distinguible del fondo (revisar) | recorte pequeno 86x105
+  [DUDOSO] AIM-P007-370.jpg  ->  logo separado de bloque ancho x[15:116] | espalda no distinguible del fondo (revisar)
+  [DUDOSO] AIM-P009-487.jpg  ->  logo separado de bloque ancho x[17:23] | espalda no distinguible del fondo (revisar) | recorte pequeno 121x353
+  [DUDOSO] AIM-P009-499.jpg  ->  logo separado de bloque ancho x[15:116] | espalda no distinguible del fondo (revisar)
+  [DUDOSO] AIM-P009-533.jpg  ->  2 bandas (se esperaban 3) | frente/espalda fusionados, separados en x=412
+  [DUDOSO] AIM-P011-602.jpg  ->  logo separado de bloque ancho x[15:116] | espalda no distinguible del fondo (revisar)
+  [DUDOSO] AIM-P011-603.jpg  ->  2 bandas (se esperaban 3) | logo separado de bloque ancho x[17:131] | frente/espalda fusionados, separados en x=304
+  [DUDOSO] AIM-P011-607.jpg  ->  logo separado de bloque ancho x[12:20] | espalda no distinguible del fondo (revisar) | recorte pequeno 145x359
+  [DUDOSO] AIM-P011-648.jpg  ->  logo separado de bloque ancho x[15:115] | espalda no distinguible del fondo (revisar)
+  [DUDOSO] AIM-P012-682.jpg  ->  logo separado de bloque ancho x[15:116] | espalda no distinguible del fondo (revisar)
+  [DUDOSO] AIM-P013-753.jpg  ->  logo separado de bloque ancho x[15:115] | espalda no distinguible del fondo (revisar)
+  [DUDOSO] AIM-P014-788.jpg  ->  2 bandas (se esperaban 3) | espalda no distinguible del fondo (revisar)
+  [DUDOSO] AIM-P015-894.jpg  ->  logo separado de bloque ancho x[15:115] | espalda no distinguible del fondo (revisar)
+  [DUDOSO] AIM-P015-896.jpg  ->  1 bandas (se esperaban 3) | sin cabecera ni pie (formato atipico) | logo separado de bloque ancho x[15:130] | espalda no distinguible del fondo (revisar)
