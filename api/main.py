@@ -11,6 +11,7 @@ from sentence_transformers import SentenceTransformer
 # Asegurar importación del módulo search_engine independientemente del working directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from api.search_engine import cargar_indice, info_indice, search_similar
+from api.search_engine_hito2 import search_similar_reranked
 
 app = FastAPI(
     title="Motor de Búsqueda Visual RAG - Sala 3 API",
@@ -29,6 +30,10 @@ app.add_middleware(
 
 MODEL_NAME = "clip-ViT-B-32"  # equivalente a openai/clip-vit-base-patch32
 _model = None
+
+# Parámetros del Hito 2: cuántos candidatos se recuperan en la fase amplia
+# antes de hacer el reranking por color.
+CANDIDATOS_INICIALES = 30
 
 
 def get_model():
@@ -112,6 +117,72 @@ async def search_image(file: UploadFile = File(...)):
         return {
             "resultados": resultados,
             "tiempo_segundos": tiempo_segundos,
+        }
+    except FileNotFoundError as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Falta un archivo de datos: {str(e)}"}
+        )
+    except ValueError as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Error interno: {str(e)}"}
+        )
+
+
+@app.post("/search/image/v2")
+async def search_image_v2(file: UploadFile = File(...)):
+    """
+    Hito 2: Motor mejorado con reranking por color HSV.
+    Recibe la imagen igual que /search/image, pero en vez de devolver el
+    top 5 directo de CLIP, hace una recuperación amplia de
+    CANDIDATOS_INICIALES y reordena combinando el score de CLIP con el
+    score del histograma HSV de la imagen real (recuperación amplia +
+    reranking + umbral dinámico, ver api/search_engine_hito2.py).
+    """
+    # Mismo control de tipo de archivo que el endpoint del Hito 1
+    if file.content_type and file.content_type not in ("image/jpeg", "image/jpg", "image/png"):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "El archivo enviado no es una imagen válida"}
+        )
+
+    try:
+        contenido = await file.read()
+        imagen = Image.open(io.BytesIO(contenido)).convert("RGB")
+    except Exception:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "El archivo enviado no es una imagen válida"}
+        )
+
+    try:
+        model = get_model()
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Error al cargar el modelo CLIP: {str(e)}"}
+        )
+
+    try:
+        t0 = time.perf_counter()
+        embedding = model.encode(imagen)
+        resultados = search_similar_reranked(
+            embedding,
+            query_image=imagen,
+            top_k=5,
+            candidatos_iniciales=CANDIDATOS_INICIALES,
+        )
+        tiempo_segundos = round(time.perf_counter() - t0, 4)
+        return {
+            "resultados": resultados,
+            "tiempo_segundos": tiempo_segundos,
+            "candidatos_evaluados": CANDIDATOS_INICIALES,
         }
     except FileNotFoundError as e:
         return JSONResponse(
