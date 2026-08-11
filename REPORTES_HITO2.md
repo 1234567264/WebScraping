@@ -292,9 +292,5 @@ Se seleccionan las mismas consultas y se comparan ambos motores con `scripts/eva
 ## 🚀 Recomendaciones / próximos pasos (Hito 2)
 
 - **Sala 4:** generar los tres índices (`embeddings_clip.npy`, `embeddings_openclip.npy`, `embeddings_siglip.npy`) sobre `data/images_normalized/` y correr la prueba integrada común (las 50 consultas ya están listas en `evaluation/consultas_hito2.csv`).
-- **Prueba integrada común:** ya completada (50/50 consultas) por Sala 2; queda pendiente la **clasificación humana de calidad del Top 5** (Muy similar / Similar / Poco similar / No relacionado) usando `frontend/app.py`.
-- **Sala 3 (calibración):** re-ajustar los pesos del reranking y `MARGEN_CORTE` con las 50 consultas; probar si conviene que `CARPETA_IMAGENES` apunte a `images_normalized/` cuando Sala 4 regenere los embeddings desde normalizadas.
-- **Comparación final Hito 1 vs Hito 2** con las consultas completas (casos A–F) para demostrar la mejora objetiva y visible.
-- **Informe final por sala** siguiendo los 10 puntos de TRABAJO.md (objetivo, qué implementaron, quién hizo qué, pruebas, resultados numéricos, evidencia visual antes/después, qué funcionó, qué falló, qué mejorarían, qué código puede explicar cada integrante) — `evaluation/INFORME_SALA2_HITO2.md` ya cumple el formato.
 
 > Fin
