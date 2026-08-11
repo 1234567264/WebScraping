@@ -30,6 +30,7 @@ Uso:
     python scripts/compare_hito1_hito2.py
     python scripts/compare_hito1_hito2.py --url http://localhost:8000
     python scripts/compare_hito1_hito2.py --solo hito2   # solo mide el motor nuevo
+    python scripts/compare_hito1_hito2.py --openclip     # agrega columna OpenCLIP (h2oc)
 """
 
 import argparse
@@ -50,7 +51,7 @@ SALIDA_JSON = os.path.join(BASE_DIR, "data", "comparacion_hito1_hito2.json")
 ENDPOINT_H1 = "/search/image"
 ENDPOINT_H2 = "/search/image/v2"
 
-CATEGORIAS = ("exacta", "sin_marco", "recoloreada", "recortada", "mockup_persona")
+CATEGORIAS = ("exacta", "sin_marco", "recoloreada", "recortada", "persona")
 
 # Conjunto de respaldo si no existe evaluation/consultas_hito2.csv
 TEST_SET_FALLBACK = [
@@ -100,7 +101,7 @@ def _top_1_y_top_5(resultados, id_correcto):
     return top1_ok, top5_ok, id_top1
 
 
-def _consultar(base_url, endpoint, ruta_imagen):
+def _consultar(base_url, endpoint, ruta_imagen, modo=None, modelo=None):
     """
     Hace POST de la imagen al endpoint y devuelve
     (resultados, tiempo_segundos, respuesta_http). Nunca lanza: ante un error
@@ -109,9 +110,15 @@ def _consultar(base_url, endpoint, ruta_imagen):
     t0 = time.perf_counter()
     try:
         with open(ruta_imagen, "rb") as f:
+            data = {}
+            if modo:
+                data["modo"] = modo
+            if modelo:
+                data["modelo"] = modelo
             respuesta = requests.post(
                 base_url + endpoint,
                 files={"file": (os.path.basename(ruta_imagen), f)},
+                data=data or None,
                 timeout=180,
             )
     except requests.exceptions.ConnectionError:
@@ -136,6 +143,12 @@ def main():
     parser.add_argument("--url", default=DEFAULT_URL, help="URL base de la API")
     parser.add_argument("--solo", choices=["hito1", "hito2"], default=None,
                         help="Probar un solo motor (por defecto ambos)")
+    parser.add_argument("--openclip", action="store_true",
+                        help="Incluir el motor Hito 2 con embeddings OpenCLIP "
+                             "(modelo=openclip) como columna extra h2oc")
+    parser.add_argument("--fusion", action="store_true",
+                        help="Incluir el motor Hito 2 por fusión CLIP+OpenCLIP+"
+                             "SigLIP (modelo=fusion) como columna extra h2fu")
     args = parser.parse_args()
 
     consultas = cargar_consultas()
@@ -145,21 +158,29 @@ def main():
 
     probar_h1 = args.solo in (None, "hito1")
     probar_h2 = args.solo in (None, "hito2")
+    probar_h2oc = args.openclip
+    probar_h2fu = args.fusion
 
     base = args.url.rstrip("/")
     filas = []
     omitidas = 0
     por_categoria = {}
     total = {"h1": {"top1": 0, "top5": 0, "n": 0, "tiempos": []},
-             "h2": {"top1": 0, "top5": 0, "n": 0, "tiempos": []}}
+             "h2": {"top1": 0, "top5": 0, "n": 0, "tiempos": []},
+             "h2oc": {"top1": 0, "top5": 0, "n": 0, "tiempos": []},
+             "h2fu": {"top1": 0, "top5": 0, "n": 0, "tiempos": []}}
 
     encabezado = ("consulta", "categoria", "id_correcto", "archivo",
                   "h1_top1", "h1_top5", "h1_tiempo_ms", "h1_mejor_id", "h1_n_resultados",
-                  "h2_top1", "h2_top5", "h2_tiempo_ms", "h2_mejor_id", "h2_n_resultados")
+                  "h2_top1", "h2_top5", "h2_tiempo_ms", "h2_mejor_id", "h2_n_resultados",
+                  "h2oc_top1", "h2oc_top5", "h2oc_tiempo_ms", "h2oc_mejor_id", "h2oc_n_resultados",
+                  "h2fu_top1", "h2fu_top5", "h2fu_tiempo_ms", "h2fu_mejor_id", "h2fu_n_resultados")
 
     print("=" * 100)
     print("SALA 3 / HITO 2 - COMPARACION HITO 1 vs HITO 2 (mismas consultas)")
-    print(f"Consultas cargadas: {len(consultas)}  |  API: {base}")
+    print(f"Consultas cargadas: {len(consultas)}  |  API: {base}"
+          + ("  |  Motor OpenCLIP: SÍ" if probar_h2oc else "")
+          + ("  |  Motor Fusión: SÍ" if probar_h2fu else ""))
     print("=" * 100)
 
     for i, c in enumerate(consultas, start=1):
@@ -174,13 +195,24 @@ def main():
             "id_correcto": c["id_correcto"], "archivo": os.path.basename(ruta),
             "h1_top1": "-", "h1_top5": "-", "h1_tiempo_ms": "-", "h1_mejor_id": "-", "h1_n_resultados": "-",
             "h2_top1": "-", "h2_top5": "-", "h2_tiempo_ms": "-", "h2_mejor_id": "-", "h2_n_resultados": "-",
+            "h2oc_top1": "-", "h2oc_top5": "-", "h2oc_tiempo_ms": "-", "h2oc_mejor_id": "-", "h2oc_n_resultados": "-",
+            "h2fu_top1": "-", "h2fu_top5": "-", "h2fu_tiempo_ms": "-", "h2fu_mejor_id": "-", "h2fu_n_resultados": "-",
         }
 
-        for motor, endpoint, probar in (("h1", ENDPOINT_H1, probar_h1),
-                                        ("h2", ENDPOINT_H2, probar_h2)):
+        for motor, endpoint, probar, extra in (
+            ("h1", ENDPOINT_H1, probar_h1, {"modo": "original"}),
+            ("h2", ENDPOINT_H2, probar_h2, {}),
+            ("h2oc", ENDPOINT_H2, probar_h2oc, {"modelo": "openclip"}),
+            ("h2fu", ENDPOINT_H2, probar_h2fu, {"modelo": "fusion"}),
+        ):
             if not probar:
                 continue
-            resultados, tiempo, resp = _consultar(base, endpoint, ruta)
+            # Hito 1: modo "original" fuerza el motor sin reranking con la
+            # consulta tal cual llega (el default "auto" ahora usa Hito 2).
+            resultados, tiempo, resp = _consultar(
+                base, endpoint, ruta,
+                modo=extra.get("modo"), modelo=extra.get("modelo"),
+            )
             if resp is not None and resp.status_code != 200:
                 print(f"{i:3d}  [{c['categoria']:12s}] {c['consulta']:<28s} {motor.upper()} error {resp.status_code}")
                 continue
@@ -195,13 +227,17 @@ def main():
             total[motor]["top5"] += int(top5_ok)
             total[motor]["n"] += 1
             total[motor]["tiempos"].append(tiempo)
-            por_categoria.setdefault(c["categoria"], {"h1": [0, 0], "h2": [0, 0]})
+            por_categoria.setdefault(c["categoria"], {"h1": [0, 0], "h2": [0, 0], "h2oc": [0, 0], "h2fu": [0, 0]})
             por_categoria[c["categoria"]][motor][0] += int(top1_ok)
             por_categoria[c["categoria"]][motor][1] += int(top5_ok)
 
         print(f"{i:3d}  [{c['categoria']:12s}] {c['consulta']:<28s} esperado={c['id_correcto']:<15s}"
               f" H1 top1={fila['h1_top1']:>2s}/top5={fila['h1_top5']:>2s} ({fila['h1_tiempo_ms']:>6} ms)"
-              f"  H2 top1={fila['h2_top1']:>2s}/top5={fila['h2_top5']:>2s} ({fila['h2_tiempo_ms']:>6} ms)")
+              f"  H2 top1={fila['h2_top1']:>2s}/top5={fila['h2_top5']:>2s} ({fila['h2_tiempo_ms']:>6} ms)"
+              + (f"  OC top1={fila['h2oc_top1']:>2s}/top5={fila['h2oc_top5']:>2s} ({fila['h2oc_tiempo_ms']:>6} ms)"
+                 if probar_h2oc else "")
+              + (f"  FU top1={fila['h2fu_top1']:>2s}/top5={fila['h2fu_top5']:>2s} ({fila['h2fu_tiempo_ms']:>6} ms)"
+                 if probar_h2fu else ""))
         filas.append([fila[k] for k in encabezado])
 
     # ── guardar evidencia CSV ──
@@ -218,11 +254,17 @@ def main():
 
     resumen = {"total_consultas": len(consultas), "omitidas": omitidas,
                "por_categoria": {}, "por_motor": {}}
-    for motor, etiqueta in (("h1", "Hito 1 (CLIP)"), ("h2", "Hito 2 (CLIP+reranking)")):
+    motores = [("h1", "Hito 1 (CLIP)"),
+               ("h2", "Hito 2 (CLIP+reranking)")]
+    if probar_h2oc:
+        motores.append(("h2oc", "Hito 2 OpenCLIP (OpenCLIP+reranking)"))
+    if probar_h2fu:
+        motores.append(("h2fu", "Hito 2 Fusión (CLIP+OpenCLIP+SigLIP)"))
+    for motor, etiqueta in motores:
         t = total[motor]
         n = max(1, t["n"])
         prom_ms = (sum(t["tiempos"]) / n * 1000) if t["tiempos"] else 0
-        print(f"{etiqueta:<28s} Top1={t['top1']}/{t['n']} ({100*t['top1']/n:.1f}%)"
+        print(f"{etiqueta:<38s} Top1={t['top1']}/{t['n']} ({100*t['top1']/n:.1f}%)"
               f"  Top5={t['top5']}/{t['n']} ({100*t['top5']/n:.1f}%)"
               f"  tiempo prom={prom_ms:.0f} ms")
         resumen["por_motor"][motor] = {
@@ -232,23 +274,34 @@ def main():
 
     print()
     print("Por categoría (Top1 / Top5):")
+    col_idx = {"h1": 4, "h2": 9, "h2oc": 14, "h2fu": 19}
     for cat in CATEGORIAS:
         if cat not in por_categoria:
             continue
-        d_h1, d_h2 = por_categoria[cat]["h1"], por_categoria[cat]["h2"]
-        n_h1 = sum(1 for f in filas if f[1] == cat and f[4] != "-")
-        n_h2 = sum(1 for f in filas if f[1] == cat and f[9] != "-")
-        print(f"  {cat:<14s} H1: {d_h1[0]}/{n_h1} - {d_h1[1]}/{n_h1}   H2: {d_h2[0]}/{n_h2} - {d_h2[1]}/{n_h2}")
-        resumen["por_categoria"][cat] = {
-            "h1_top1": d_h1[0], "h1_top5": d_h1[1],
-            "h2_top1": d_h2[0], "h2_top5": d_h2[1],
-        }
+        partes = []
+        resumen_cat = {}
+        for motor, _etiqueta in motores:
+            d = por_categoria[cat][motor]
+            n_motor = sum(1 for f in filas if f[1] == cat and f[col_idx[motor]] != "-")
+            partes.append(f"{motor}: {d[0]}/{n_motor} - {d[1]}/{n_motor}")
+            resumen_cat[f"{motor}_top1"] = d[0]
+            resumen_cat[f"{motor}_top5"] = d[1]
+        print(f"  {cat:<14s} " + "   ".join(partes))
+        resumen["por_categoria"][cat] = resumen_cat
 
     if probar_h1 and probar_h2 and total["h1"]["n"] and total["h2"]["n"]:
         delta_top1 = total["h2"]["top1"] - total["h1"]["top1"]
         delta_top5 = total["h2"]["top5"] - total["h1"]["top5"]
         print()
         print(f"Diferencia H2 - H1 en aciertos: Top1 = {delta_top1:+d}, Top5 = {delta_top5:+d}")
+    if probar_h2oc and probar_h2 and total["h2oc"]["n"] and total["h2"]["n"]:
+        delta_top1 = total["h2oc"]["top1"] - total["h2"]["top1"]
+        delta_top5 = total["h2oc"]["top5"] - total["h2"]["top5"]
+        print(f"Diferencia OpenCLIP - CLIP (ambos H2): Top1 = {delta_top1:+d}, Top5 = {delta_top5:+d}")
+    if probar_h2fu and probar_h2 and total["h2fu"]["n"] and total["h2"]["n"]:
+        delta_top1 = total["h2fu"]["top1"] - total["h2"]["top1"]
+        delta_top5 = total["h2fu"]["top5"] - total["h2"]["top5"]
+        print(f"Diferencia Fusión - CLIP (ambos H2): Top1 = {delta_top1:+d}, Top5 = {delta_top5:+d}")
 
     with open(SALIDA_JSON, "w", encoding="utf-8") as f:
         json.dump(resumen, f, ensure_ascii=False, indent=2)

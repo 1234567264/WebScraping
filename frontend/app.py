@@ -1,316 +1,112 @@
 # -*- coding: utf-8 -*-
 """
-app.py - Interfaz Streamlit (Sala 2, Hito 2)
-----------------------------------------------
-ESTA SALA NO GENERA EMBEDDINGS NI BUSCA LOCALMENTE.
+app.py - Interfaz simple de búsqueda visual
+-------------------------------------------
+Sube una imagen, la API de Sala 3 la procesa y muestra las 5 camisetas
+más parecidas. Nada más.
 
-Flujo unico del proyecto:
-    Usuario sube imagen -> Streamlit -> POST /search/image (API Sala 3)
-    -> la API genera el embedding con CLIP y busca en el indice unico
-    -> devuelve Top 5 -> la interfaz muestra resultados y registra evaluacion
+Requisito: tener la API levantada antes de correr esto.
+    uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
-El endpoint /search/image de la API integra el modulo de preparacion de
-consultas de Sala 2 (api/preprocesar_consulta.py) y soporta modos:
-
-    auto      : prepara la consulta y devuelve respuesta enriquecida
-                (original + procesada + ambos rankings + preprocesamiento).
-    procesada : fuerza el uso de la imagen preparada (motor Hito 2).
-    original  : fuerza el uso de la consulta tal como llega (motor Hito 1).
-    legacy    : devuelve solo la lista del motor (comportamiento Hito 1).
-    completo  : prepara la consulta (Sala 2) + reranking visual (Sala 3).
-
-Correr (con la API de Sala 3 levantada en el puerto 8000):
-    streamlit run frontend/app.py          # desde la raiz del proyecto
-
-La API se levanta con:
-    uvicorn api.main:app --port 8000       # desde la raiz del proyecto
+Correr desde la raíz del proyecto:
+    streamlit run frontend/app.py
 """
 
-import base64
 import io
 import os
 
-import pandas as pd
 import requests
 import streamlit as st
 from PIL import Image
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-IMAGES_DIR = os.path.join(DATA_DIR, "images_final")
-EVAL_CSV = os.path.join(DATA_DIR, "evaluation.csv")
+API_URL = "http://localhost:8000"
+IMAGES_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "data", "images_normalized",
+)
 
-API_URL_DEFAULT = "http://localhost:8000"
+st.set_page_config(page_title="Búsqueda visual de camisetas", layout="wide")
 
-MODOS = {
-    "Auto (preparar + Hito 2)": "auto",
-    "Procesada (siempre preparada)": "procesada",
-    "Original (motor Hito 1)": "original",
-    "Completo (Sala 2 + reranking Sala 3)": "completo",
-    "Legacy (solo lista)": "legacy",
-}
-
-CLASIFICACIONES = {
-    "Correcto": "Correcto",
-    "Util, pero no duplicado": "Util_no_duplicado",
-    "Incorrecto": "Incorrecto",
-}
-
-st.set_page_config(page_title="Buscador visual de camisetas", layout="wide")
+st.title("Búsqueda visual de camisetas")
+st.caption("Subí una imagen y obtené las 5 más parecidas.")
 
 
-def api_url():
-    return (st.session_state.get("api_url") or API_URL_DEFAULT).rstrip("/")
-
-
-def llamar_api(url, archivo, modo):
-    """Envia la imagen a FastAPI y devuelve (ok, datos_o_error)."""
+def buscar(archivo, modelo):
+    """Envía la imagen a la API y devuelve (datos, error)."""
     try:
         resp = requests.post(
-            f"{url}/search/image",
+            f"{API_URL}/search/image",
             files={"file": (archivo.name, archivo.getvalue(), archivo.type)},
-            data={"modo": modo},
+            data={"modo": "auto", "modelo": modelo},
             timeout=120,
         )
     except requests.exceptions.ConnectionError:
-        return False, {"tipo": "servidor_no_disponible"}
+        return None, "No se pudo conectar a la API. Ejecutá: uvicorn api.main:app --port 8000"
     except requests.exceptions.Timeout:
-        return False, {"tipo": "timeout"}
-
-    if resp.status_code == 200:
-        data = resp.json()
-        if isinstance(data, list):
-            data = {"resultados": data}
-        return True, data
-    if resp.status_code == 400:
-        return False, {"tipo": "archivo_invalido", "detalle": resp.text}
-    return False, {"tipo": "error", "detalle": resp.text}
+        return None, "La API tardó demasiado. Reintentá."
+    if resp.status_code != 200:
+        return None, f"Error de la API ({resp.status_code}): {resp.text[:300]}"
+    return resp.json(), None
 
 
-def ruta_imagen_local(nombre_archivo):
-    ruta = os.path.join(IMAGES_DIR, nombre_archivo)
+def ruta_local(nombre):
+    ruta = os.path.join(IMAGES_DIR, nombre)
     return ruta if os.path.exists(ruta) else None
 
 
-def _imagen_desde_b64(b64):
-    if not b64:
-        return None
-    return Image.open(io.BytesIO(base64.b64decode(b64)))
-
-
-def mostrar_resultado(rank, res, consulta):
-    c1, c2 = st.columns([1, 2.2])
-    with c1:
-        local = ruta_imagen_local(res["imagen"])
-        if local:
-            st.image(local, use_container_width=True)
-        else:
-            st.image(res["url"], use_container_width=True)
-    with c2:
-        st.markdown(f"**#{rank} — {res['nombre']}**")
-        st.markdown(f"`{res['id']}` · Proveedor: {res['proveedor']}")
-        st.markdown(f"**Score de similitud:** `{res['score']:.4f}`")
-        if res.get("score_reranking") is not None:
-            st.markdown(f"**Reranking Sala 3:** `{res['score_reranking']:.4f}`")
-        st.markdown(f"[Abrir imagen original]({res['url']})")
-        clasificacion = st.radio(
-            "¿El resultado es relevante?",
-            list(CLASIFICACIONES.keys()),
-            index=0,
-            key=f"eval_{consulta}_{rank}",
-            horizontal=True,
-            label_visibility="visible",
-        )
-    st.divider()
-    return {
-        "consulta": consulta,
-        "resultado_id": res["id"],
-        "posicion": rank,
-        "score": float(res["score"]),
-        "clasificacion_humana": CLASIFICACIONES[clasificacion],
-        "observacion": "",
-    }
-
-
-def mostrar_antes_despues(data):
-    """Muestra la consulta original y la preparada (antes/despues)."""
-    orig = _imagen_desde_b64(data.get("imagen_original_b64"))
-    proc = _imagen_desde_b64(data.get("imagen_procesada_b64"))
-    if orig is None and proc is None:
-        return
-    st.subheader("Antes / Después (preparación de la consulta)")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**Consulta original**")
-        if orig is not None:
-            st.image(orig, use_container_width=True)
-    with c2:
-        st.markdown("**Consulta preparada (Sala 2)**")
-        if proc is not None:
-            st.image(proc, use_container_width=True)
-    prep = data.get("preprocesamiento") or {}
-    if prep:
-        st.markdown(
-            f"Pasos: `{'; '.join(prep.get('pasos', [])) or 'ninguno'}` · "
-            f"Backend: `{prep.get('backend')}` · "
-            f"Recorte: `{prep.get('recorte_pct')}` · "
-            f"Preprocesado: `{prep.get('tiempo_segundos')}s`"
-        )
-
-
-def mostrar_ranking_extra(titulo, resultados):
-    if not resultados:
-        return
-    st.markdown(f"**{titulo}**")
-    for rank, r in enumerate(resultados, start=1):
-        st.markdown(f"{rank}. `{r['id']}` · {r['nombre']} · score `{r['score']:.4f}`")
-
-
-def guardar_evaluacion(filas):
-    df_nuevo = pd.DataFrame(filas)
-    if os.path.exists(EVAL_CSV):
-        df_anterior = pd.read_csv(EVAL_CSV, encoding="utf-8")
-        df_final = pd.concat([df_anterior, df_nuevo], ignore_index=True)
-    else:
-        df_final = df_nuevo
-    df_final.to_csv(EVAL_CSV, index=False, encoding="utf-8")
-    return df_final
-
-
-def guardar_tiempo(consulta, tiempo_segundos):
-    ruta = os.path.join(DATA_DIR, "tiempos.csv")
-    fila = pd.DataFrame([{"consulta": consulta, "tiempo_segundos": float(tiempo_segundos)}])
-    if os.path.exists(ruta):
-        anterior = pd.read_csv(ruta, encoding="utf-8")
-        fila = pd.concat([anterior, fila], ignore_index=True)
-    fila.to_csv(ruta, index=False, encoding="utf-8")
-
-
-def mostrar_metricas(df_eval):
-    if df_eval.empty:
-        st.info("Aun no hay evaluaciones guardadas.")
-        return
-    consultas = df_eval["consulta"].unique()
-    n_top1 = 0
-    n_util = 0
-    for c in consultas:
-        g = df_eval[df_eval["consulta"] == c]
-        top1 = g[(g["posicion"] == 1) & (g["clasificacion_humana"] == "Correcto")]
-        util = g[g["clasificacion_humana"] != "Incorrecto"]
-        if not top1.empty:
-            n_top1 += 1
-        if not util.empty:
-            n_util += 1
-    n = len(consultas)
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Consultas evaluadas", n)
-    c2.metric("Top 1 correcto", f"{n_top1} de {n} ({n_top1 / n * 100:.0f}%)" if n else "0")
-    c3.metric("Top 5 util (>=1 relevante)", f"{n_util} de {n} ({n_util / n * 100:.0f}%)" if n else "0")
-
-
-st.title("Busqueda visual de camisetas")
-st.caption("Una imagen se carga una sola vez, se procesa con un solo modelo, se compara "
-           "contra un solo indice y los resultados se muestran en una sola interfaz.")
-
-with st.sidebar:
-    st.header("Conexion a la API")
-    st.text_input("URL de la API (Sala 3)", value=API_URL_DEFAULT, key="api_url")
-    st.header("Modo de busqueda")
-    st.radio("Preparación de la consulta (Sala 2)", list(MODOS.keys()), key="modo_busqueda")
-    if st.button("Ver estado del servidor", use_container_width=True):
-        with st.spinner("Consultando /health..."):
-            try:
-                r = requests.get(f"{api_url()}/health", timeout=10)
-                if r.status_code == 200:
-                    d = r.json()
-                    st.success(f"API OK · {d['products']} productos · {d['embeddings']} embeddings · {d['model']}")
-                else:
-                    st.error(f"API responde con estado {r.status_code}: {r.text}")
-            except requests.exceptions.ConnectionError:
-                st.error("El servidor no esta disponible. Ejecuta: uvicorn api.main:app --port 8000")
-
-st.subheader("1. Sube la imagen de consulta")
-archivo = st.file_uploader("Imagen (JPG, JPEG o PNG)", type=["jpg", "jpeg", "png"])
-
+archivo = st.file_uploader("Elegí una imagen (JPG, JPEG o PNG)", type=["jpg", "jpeg", "png"])
 if archivo is None:
     st.stop()
 
-consulta = archivo.name
-modo = MODOS[st.session_state.get("modo_busqueda", "Auto (preparar + Hito 2)")]
+modelo = st.radio(
+    "Modelo de embeddings",
+    options=["fusion", "openclip", "clip"],
+    index=0,
+    format_func=lambda m: {
+        "fusion": "Fusión (CLIP + OpenCLIP + SigLIP) — más robusto",
+        "openclip": "OpenCLIP (laion/CLIP-ViT-B-32-laion2B-s34B-b79K)",
+        "clip": "CLIP (openai/clip-vit-base-patch32)",
+    }[m],
+    help="La fusión combina 3 modelos: si un punto o franja tapa parte del "
+         "diseño en la foto, los otros modelos mantienen al producto correcto.",
+)
 
 col_q, col_r = st.columns([1, 2])
 with col_q:
-    st.subheader("Imagen consultada")
+    st.subheader("Consulta")
     st.image(Image.open(io.BytesIO(archivo.getvalue())), use_container_width=True)
 
 with col_r:
-    st.subheader("Resultados similares")
-
-    clave = f"{consulta}|{modo}"
-    if st.session_state.get("resultado_consulta") != clave:
-        st.session_state["resultado_consulta"] = clave
-        st.session_state["resultados"] = None
-        st.session_state["error"] = None
-        with st.spinner("Procesando imagen..."):
-            ok, data = llamar_api(api_url(), archivo, modo)
-        if ok:
-            st.session_state["resultados"] = data
-            if data.get("tiempo_segundos") is not None:
-                guardar_tiempo(consulta, data["tiempo_segundos"])
-        else:
-            st.session_state["error"] = data
-
-    error = st.session_state.get("error")
-    if error:
-        tipo = error.get("tipo")
-        if tipo == "servidor_no_disponible":
-            st.error("El servidor no esta disponible. Verifica que la API de Sala 3 este corriendo.")
-        elif tipo == "archivo_invalido":
-            st.error("El archivo no es valido. Sube una imagen JPG, JPEG o PNG.")
-        elif tipo == "timeout":
-            st.error("La API tardo demasiado en responder. Reintenta.")
-        else:
-            st.error(f"Error del servidor: {error.get('detalle', tipo)}")
+    st.subheader("Resultados")
+    with st.spinner("Buscando..."):
+        data, err = buscar(archivo, modelo)
+    if err:
+        st.error(err)
         st.stop()
 
-    data = st.session_state.get("resultados")
-    if data is None:
+    resultados = data.get("resultados") or []
+    if not resultados:
         st.info("No se encontraron resultados.")
         st.stop()
 
-    mostrar_antes_despues(data)
+    st.caption(
+        f"Modo: `{data.get('modo')}` · "
+        f"Modelo: `{data.get('modelo')}` · "
+        f"Tiempo de respuesta: `{data.get('tiempo_segundos')}s`"
+    )
 
-    st.caption(f"Modo usado por la API: `{data.get('modo', '?')}`")
-
-    res = data.get("resultados") or []
-    if not res:
-        st.info("No se encontraron resultados.")
-        st.stop()
-
-    filas = []
-    for rank, r in enumerate(res, start=1):
-        filas.append(mostrar_resultado(rank, r, consulta))
-
-    if modo != "legacy" and (data.get("resultados_original") or data.get("resultados_procesada")):
-        st.divider()
-        st.subheader("Comparación de rankings (Hito 1 vs Hito 2)")
-        c1, c2 = st.columns(2)
+    for rank, r in enumerate(resultados, start=1):
+        c1, c2 = st.columns([1, 2.2])
         with c1:
-            mostrar_ranking_extra("Hito 1 (consulta original)", data.get("resultados_original") or [])
+            local = ruta_local(r.get("imagen", ""))
+            st.image(local if local else r["url"], use_container_width=True)
         with c2:
-            mostrar_ranking_extra("Hito 2 (consulta preparada)", data.get("resultados_procesada") or [])
-
-    observacion = st.text_area("Observacion sobre esta consulta (opcional)")
-    if st.button("Guardar evaluacion de esta consulta", type="primary"):
-        for f in filas:
-            f["observacion"] = observacion
-        df = guardar_evaluacion(filas)
-        st.success(f"Evaluacion guardada en data/evaluation.csv (total {len(df)} registros)")
-
-st.divider()
-st.subheader("2. Metricas de las pruebas")
-df_eval = None
-if os.path.exists(EVAL_CSV):
-    df_eval = pd.read_csv(EVAL_CSV, encoding="utf-8")
-mostrar_metricas(df_eval if df_eval is not None else pd.DataFrame(columns=[
-    "consulta", "resultado_id", "posicion", "score", "clasificacion_humana", "observacion"]))
+            st.markdown(f"**#{rank} — {r['nombre']}**")
+            st.markdown(f"`{r['id']}` · Proveedor: `{r['proveedor']}`")
+            score = r.get("score_reranking")
+            if score is None:
+                score = r["score"]
+            st.markdown(f"**Similitud:** `{score:.4f}`")
+            if r.get("url"):
+                st.markdown(f"[Abrir imagen original]({r['url']})")
+        st.divider()

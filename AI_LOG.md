@@ -158,3 +158,173 @@ debía borrarse moviendo sus archivos a las carpetas correspondientes.
 - `evaluation/INFORME_SALA2_HITO2.md` actualizado a los números nuevos y movido a
   su carpeta canónica.
 - Carpeta `hito2/` eliminada por completo.
+
+## Fecha: 2026-08-11 (Fase 3 - robustez del motor y descriptores avanzados)
+
+### Prompt 15 - Reranking enriquecido con descriptores avanzados y API robusta
+**Propósito:** reforzar el motor del Hito 2 añadiendo descriptores visuales
+avanzados al score (más allá de color+estructura), corregir escalas del score
+CLIP, y endurecer la API (lifespan, validación de imagen, modos correctos).
+**Resultado:**
+- `api/descriptores_visuales.py` (nuevo): descriptores avanzados por atributo —
+  color dominante (k-means HSV), gama cromática (histograma HSV grueso), patrón
+  de diseño (energía de textura en grilla), estructura con/sin marco (banda
+  perimetral) y franjas/rayas + banda central. Con `similitudes_visuales()`
+  (todas las similitudes en [0,1]).
+- `scripts/precomputar_descriptores.py` (nuevo): precálculo de los descriptores
+  avanzados de las 1000 imágenes → `data/descriptores.json` (clave `id_catalogo`).
+- `api/search_engine_hito2.py`: el score_final ahora combina 10 atributos
+  (embedding normalizado por consulta con min-max + color global/frente/espalda +
+  estructura 32x32 + 5 descriptores avanzados) con pesos calibrables que suman 1;
+  `modelo_utilizado` actualizado. Descriptores clásicos y avanzados se leen de la
+  carpeta coherente con el índice activo (`images_normalized` en Hito 2,
+  `images_final` en el fallback del Hito 1); se usa el precomputado cuando existe
+  y on-the-fly con cache si no. Fix de correlación: dos diseños lisos (sin
+  variación) ahora puntúan 1.0 en patrón/estructura en vez de 0.0.
+- `api/main.py`: `on_event("startup")` (deprecado) reemplazado por
+  `lifespan`; validación de dimensión mínima (32px por lado) en `/search/image`
+  y `/search/image/v2`; modos corregidos — `auto`/`completo`/`procesada` usan el
+  motor con reranking (Sala 1+2+3), nuevo `clasico` (Hito 1 + preprocesamiento de
+  Sala 2), `original` y `legacy` sin cambios.
+- Verificación: `py_compile` OK en todos los archivos tocados y test funcional de
+  `descriptores_visuales` con imágenes sintéticas (auto-similitud 1.0, colores
+  distintos → 0.0 en color, lisos vs rayados distinguidos por patrón/franjas).
+
+## Fecha: 2026-08-11 (verificación integral + correcciones)
+
+### Prompt 16 - Verificación de punta a punta del proyecto (sin commit)
+**Propósito:** ejecutar el prompt de inicio de sesión (leer AGENTS.md + docx,
+hacer que el proyecto funcione completo: API, motor Hito 1 + Hito 2 y frontend,
+verificando con curl, registrando en AI_LOG, SIN commit ni push).
+**Resultado:**
+- `AGENTS.md` creado: reglas operativas para la IA, con la fuente de verdad en
+  `RAG HACKATON FIN DE SEMANA .docx`.
+- API levantada con la venv (torch CPU): `/health` OK (1000 productos, 1000
+  embeddings, 512 dims, `desfase_detectado=false`, ids alineados con el CSV).
+- `/search/image` probado con consultas reales: exacto→#2, sin_marco→#1,
+  recoloreado→#1, recorte→#1, persona→fuera del Top 5 (caso difícil permitido).
+- Manejo de errores OK: sin imagen→422, archivo inválido→400 con el mensaje del
+  docx, imagen <32px→400 con mensaje claro.
+- `data/descriptores.json` regenerado con las **1000** imágenes (antes 20),
+  0 errores, 60s.
+- Frontend reescrito como interfaz simple (subir imagen → Top 5); `py_compile`
+  OK, Streamlit sirve HTTP 200 sin errores.
+- Fix en `api/main.py`: `modo=original` es ruta rápida (0.4s, sin preprocesar);
+  antes corría GrabCut + doble embedding innecesariamente.
+- Fix en `scripts/compare_hito1_hito2.py`: H1 ahora llama con `modo=original`
+  (el default `auto` pasó a usar el motor H2, lo que sesgaba la columna H1);
+  categoría `persona` agregada al resumen (estaba como `mockup_persona`).
+- Comparación H1 vs H2 regenerada (50 consultas, mismas imágenes):
+  **H1 Top1 32/50 (64%) · Top5 36/50 (72%); H2 Top1 36/50 (72%) · Top5 37/50
+  (74%)**. Por categoría: sin_marco 7→10 y recortada 6→10 en Top1; recoloreada
+  6→7; exacta 10→8 y persona 3→1. La "regresión" en exacta es un artefacto del
+  set (las exactas son copias de images_final y el índice H2 es images_normalized);
+  persona es el caso difícil documentado en el docx.
+- NOTA: no se hizo commit ni push.
+
+### Prompt 17 - Integración OpenCLIP como mejora de la búsqueda (sin commit)
+**Propósito:** integrar OpenCLIP (laion/CLIP-ViT-B-32-laion2B-s34B-b79K) como
+modelo de embeddings opcional del motor Hito 2 para que la búsqueda reconozca
+mejor diseños con franjas/dibujos centrales, usando el índice ya existente
+`data/embeddings_openclip.npy` (Sala 4, 1000×512).
+**Resultado:**
+- `api/search_engine_hito2.py`: índice generalizado por modelo
+  (`INDICES_NORMALIZADOS` con `embeddings_clip.npy` / `embeddings_openclip.npy`,
+  cache por modelo en `_cache_indices`). `cargar_indice_normalizado(modelo)`,
+  `buscar_en_indice_normalizado(..., modelo)` y `search_similar_reranked(...,
+  modelo)`. Si falta el índice openclip → ValueError con instrucción de
+  generación (sin fallback silencioso); para "clip" se conserva el fallback al
+  índice Hito 1. `modelo_utilizado` responde `openclip+color+estructura+...`.
+- `api/main.py`: parámetro de formulario `modelo` (`clip` default | `openclip`)
+  en `/search/image` y `/search/image/v2`; encoder lazy de OpenCLIP vía
+  transformers (`get_openclip`/`_embedding_openclip`) precalentado en lifespan;
+  extracción del embedding coherente con `extraer_embeddings` del script de
+  índices (el checkpoint devuelve `BaseModelOutputWithPooling`; se usa
+  `image_embeds` o `pooler_output`). `modelo=openclip` solo válido en modos Hito 2
+  (auto/completo/procesada); en H1 (clasico/original/legacy) → 400 con mensaje.
+  En modo openclip no se devuelven `resultados_original/procesada` (serían
+  mezclas contra el índice CLIP del Hito 1). `/health` expone
+  `modelo_openclip` e `indice_openclip_ok`.
+- `frontend/app.py`: radio CLIP/OpenCLIP (OpenCLIP por defecto) que envía
+  `modelo`; la caption muestra el modelo usado.
+- `scripts/compare_hito1_hito2.py`: flag `--openclip` agrega el motor `h2oc`
+  (endpoint `/search/image/v2` con `modelo=openclip`) como columna y en el
+  resumen por categoría.
+- Evaluación (50 consultas, 3 motores, mismas imágenes):
+  **H1 Top1 32/50 (64%) · Top5 36/50 (72%)**
+  **H2 (CLIP) Top1 36/50 (72%) · Top5 37/50 (74%)**
+  **H2 OpenCLIP Top1 41/50 (82%) · Top5 47/50 (94%)** (+5 Top1, +10 Top5 vs CLIP).
+  Por categoría (Top1/Top5): exacta 9/10, sin_marco 10/10, recoloreada 9/10,
+  recortada 10/10, **persona 3/10→7/10** (CLIP solo 1/10). Evidencia en
+  `data/comparacion_hito1_hito2.csv` y `.json`.
+- Fix: `_embedding_openclip` inicial falló con `BaseModelOutputWithPooling` (sin
+  `.norm()` ni `.image_embeds`); resuelto con la misma lógica de
+  `extraer_embeddings` (image_embeds → pooler_output).
+- NOTA: el modelo OpenCLIP queda como opción (`modelo=openclip`); el default
+  sigue siendo `clip` para conservar el contrato del docx ("un solo modelo CLIP").
+- NOTA: no se hizo commit ni push.
+
+### Prompt 18 - Robustez a oclusiones: fusión CLIP+OpenCLIP+SigLIP y multi-recorte (sin commit)
+**Propósito:** que la búsqueda encuentre el producto más parecido AUNQUE la
+imagen tenga un "punto grande" u otro elemento tapando parte del diseño.
+**Resultado:**
+- `api/search_engine_hito2.py`: recuperación por FUSIÓN de índices alineados
+  (`recuperacion_fusion` promedia por producto los cosenos de clip+openclip+
+  siglip) y multi-recorte (imagen completa + 4 cuadrantes, score = MÁXIMO por
+  recorte): si un recorte contiene el punto que tapa, otro lo compensa.
+  Refactor del reranking en `_rerank_candidatos` reutilizable por el motor de
+  un solo modelo y por el de fusión (`search_similar_reranked_fusion`).
+  Pesos reajustados para robustez: embedding 0.50 (la señal más robusta a
+  oclusiones), estructura 0.07, color_dominante 0.08, patron 0.06, franjas 0.04.
+- `api/main.py`: modelo `fusion` (CLIP+OpenCLIP+SigLIP) con `get_siglip` +
+  `_embedding_siglip` (transformers, lazy) y `_recortes_consulta`/`_encodificar_fusion`
+  (5 recortes × 3 modelos). `_motor_reranked` despacha según modelo;
+  `CANDIDATOS_INICIALES_FUSION=100`. En modos no-clip solo se calcula el
+  embedding de la consulta preparada (ahorra ~50% del cómputo). `/health`
+  expone `modelos_fusion`.
+- `frontend/app.py`: radio con opción recomendada "Fusión (CLIP + OpenCLIP +
+  SigLIP) — más robusto" como default.
+- `scripts/compare_hito1_hito2.py`: flag `--fusion` agrega el motor `h2fu`.
+- Evaluación estándar (50 consultas): **Fusión Top1 42/50 (84%) · Top5 48/50
+  (96%)**, OpenCLIP 40/46, H2-CLIP 34/37, H1 32/36. Fusión recupera exacta
+  10/10 y persona 8/10 Top5.
+- Prueba de oclusión (punto negro/blanco 34% y 50%, 3 posiciones, 5 productos,
+  60 casos): oclusión 34% → **fusión 30/30 y openclip 30/30** (clip 27/30);
+  oclusión 50% (punto que cubre toda la imagen) → fusión 18/30 (openclip
+  15/30, clip 11/30).
+- Tiempos (CPU, en caliente): fusión ~5-6s por consulta (15 forwards), clip y
+  openclip <1s.
+- LÍMITE honesto: no existe "100%". Con un punto de hasta ~1/3 del diseño la
+  fusión acierta siempre; con una mancha que cubre TODA la imagen (50%) ningún
+  modelo puede garantizarlo. Es el límite físico de cualquier sistema visual.
+- NOTA: no se hizo commit ni push.
+
+### Prompt 19 - images_normalized como carpeta ÚNICA de búsqueda (sin commit)
+**Propósito:** que `data/images_normalized/` sea la carpeta de donde se buscan
+TODAS las imágenes del catálogo (antes el fallback del Hito 1 leía los
+descriptores visuales desde `images_final/`).
+**Resultado:**
+- `api/search_engine_hito2.py`: eliminado `CARPETA_IMAGENES_H1` y la bandera
+  `_indice_normalizado_activo`. `_carpeta_imagenes_activa()` ahora SIEMPRE
+  devuelve `CARPETA_IMAGENES` (`data/images_normalized/`), sin excepciones.
+  Los descriptores visuales (color/estructura/avanzados) se calculan siempre
+  sobre el banco limpio, coherente con los índices de Sala 4.
+- Nuevo `_resolver_imagen(nombre, id)`: resuelve por nombre exacto del CSV o
+  por el equivalente normalizado `<id>.jpg` (Sala 1 convierte todo a .jpg);
+  usado por `_descriptores_de_archivo` y `_descriptores_avanzados_candidato`.
+  Verificado: las 1000 imágenes de products.csv resuelven en images_normalized.
+- `_descriptores_avanzados_candidato` ahora usa SIEMPRE los precomputados de
+  `descriptores.json` (calculados sobre images_normalized), no solo cuando el
+  índice activo era el normalizado.
+- El fallback del Hito 1 (falta embeddings_clip.npy) sigue funcionando solo
+  para el ranking por vectores; las imágenes siempre salen de images_normalized.
+- Verificación: `/search/image/v2` con openclip sobre una imagen de
+  images_normalized → top1 correcto (score 1.0), `modelo_utilizado` correcto.
+- REFUERZO ESTRICTO: se revisó todo el flujo de búsqueda (frontend + API +
+  precomputo). `frontend/app.py` y `api/search_engine_hito2.py` solo usan
+  `data/images_normalized/`. `scripts/precomputar_descriptores.py` también se
+  hizo estricto: eliminado el respaldo a `images_final`; si un producto no
+  resuelve en images_normalized se marca error, no se sustituye. Se regeneró
+  `data/descriptores.json` → fuente "images_normalized", 1000/1000 OK, 0
+  errores (el respaldo a images_final nunca fue necesario).
+- NOTA: no se hizo commit ni push.
