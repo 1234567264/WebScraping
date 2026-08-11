@@ -15,9 +15,11 @@ Plataforma de búsqueda visual de camisetas deportivas basada en **embeddings CL
                 │
 [generar_embeddings.py] → data/embeddings.npy + data/ids.npy   (Sala 4)
                 │
-[FastAPI api/main.py] → POST /search/image + GET /health   (Sala 3)
+[preprocesar_consulta.py] → prepara la imagen de consulta (Sala 2, Hito 2)
                 │
-[Streamlit frontend/app.py] → sube imagen, muestra Top 5 y registra evaluación   (Sala 2)
+[FastAPI api/main.py] → POST /search/image (modos) + /search/image/v2 + GET /health   (Sala 3)
+                │
+[Streamlit frontend/app.py] → sube imagen, antes/después, Top 5, compara H1 vs H2 y registra evaluación   (Sala 2)
 ```
 
 ## Requisitos previos
@@ -111,8 +113,10 @@ python -m uvicorn api.main:app --port 8000
 Al iniciar carga el índice y el modelo CLIP una sola vez. Endpoints:
 
 - `GET /health` — estado, cantidad de productos/embeddings y modelo.
-- `POST /search/image` — recibe una imagen (multipart), genera su embedding y devuelve el **Top 5**: `{resultados: [{id, nombre, imagen, url, proveedor, score}...], tiempo_segundos}` (Hito 1).
+- `POST /search/image` — recibe una imagen (multipart) y el `modo` de búsqueda (formulario). Devuelve el **Top 5** y, en los modos que preparan la consulta, además la imagen preparada, ambos rankings (Hito 1 y Hito 2) y el detalle del preprocesamiento (Sala 2, Hito 2).
 - `POST /search/image/v2` — igual, pero con el **motor del Hito 2** (recuperación amplia + reranking por color/regiones/estructura + umbral dinámico). Cada resultado incluye `score_inicial`, `score_color_global`, `score_color_frente`, `score_color_espalda`, `score_estructura`, `score_reranking`, `posicion_final` y `modelo_utilizado`.
+
+**Modos de `POST /search/image` (Sala 2):** `auto` (prepara la consulta y devuelve respuesta enriquecida), `procesada` (siempre usa la imagen preparada, Hito 2), `original` (siempre usa la consulta tal cual, Hito 1), `completo` (Sala 2 + reranking de Sala 3) y `legacy` (solo la lista del motor).
 
 Prueba rápida desde otra terminal:
 
@@ -128,9 +132,11 @@ streamlit run frontend/app.py
 
 Abre `http://localhost:8501` en el navegador:
 1. En el sidebar verifica "API OK · 1000 productos · 1000 embeddings".
-2. Sube una imagen (JPG/JPEG/PNG).
-3. Revisa el Top 5 (imagen, ID, nombre, proveedor, URL, score).
-4. Clasifica cada resultado (**Correcto / Útil, pero no duplicado / Incorrecto**) y guarda la evaluación → `data/evaluation.csv`.
+2. Elige el **modo de búsqueda** en el sidebar (auto / procesada / original / completo / legacy).
+3. Sube una imagen (JPG/JPEG/PNG).
+4. Revisa la vista **antes/después** (consulta original vs preparada por Sala 2) y el Top 5 (imagen, ID, nombre, proveedor, URL, score).
+5. En los modos con preparación, compara los rankings **Hito 1 vs Hito 2**.
+6. Clasifica cada resultado (**Correcto / Útil, pero no duplicado / Incorrecto**) y guarda la evaluación → `data/evaluation.csv`.
 
 ### 7. Normalizar el banco de imágenes (Sala 1 — Hito 2)
 
@@ -153,7 +159,7 @@ Genera:
 
 ### 8. Motor mejorado y reranking del Top 5 (Sala 3 — Hito 2)
 
-El motor del Hito 1 (`POST /search/image`) sigue disponible para comparar. El motor del Hito 2 se expone en `POST /search/image/v2`: recuperación amplia (Top 30) + reranking combinando el score CLIP con color HSV global, color por regiones frente/espalda y estructura del patrón, más umbral dinámico (puede devolver 1, 3 o 5 resultados según la calidad):
+El motor del Hito 1 (`POST /search/image` con `modo=original`) sigue disponible para comparar. El motor del Hito 2 se expone en `POST /search/image/v2`: recuperación amplia (Top 30) + reranking combinando el score CLIP con color HSV global, color por regiones frente/espalda y estructura del patrón, más umbral dinámico (puede devolver 1, 3 o 5 resultados según la calidad):
 
 ```bash
 python -m uvicorn api.main:app --port 8000
@@ -162,17 +168,29 @@ python -m uvicorn api.main:app --port 8000
 #   posicion_final, modelo_utilizado
 ```
 
+### 9. Preparación de la consulta (Sala 2 — Hito 2)
+
+El módulo `api/preprocesar_consulta.py` limpia la imagen del usuario ANTES de generar el embedding (el problema contrario al de Sala 1: Sala 1 limpia el banco, Sala 2 limpia la consulta):
+
+```bash
+# a) Generar el conjunto común de 50 consultas (10 diseños × 5 versiones)
+python scripts/generar_consultas_hito2.py        # → data/consultas/ + evaluation/consultas_hito2.csv
+# b) Evaluar Hito 1 vs Hito 2 sobre las 50 consultas
+python scripts/evaluar_hito2.py                  # → data/resultados_hito2.csv + data/resumen_hito2.txt
+# c) Evidencia: montajes antes/después + coherencia del Top 5
+python scripts/evidencia_hito2.py                # → data/montajes/ + data/evidencia_coherencia_hito2.txt
+```
+
+La API guarda por cada consulta la versión original y la procesada en `data/queries_original/` y `data/queries_procesadas/`.
+
 **Prueba integrada común (50 consultas) y comparación Hito 1 vs Hito 2:**
 
 ```bash
-# a) Generar las consultas derivables (10 exactas + 10 sin marco; las 30
-#    restantes las aportan Sala 4 y Sala 2 al mismo CSV)
-python scripts/generar_consultas_prueba.py        # → evaluation/consultas_hito2.csv
-# b) Con la API corriendo, comparar ambos motores con las mismas consultas
+# Con la API corriendo, comparar ambos motores con las mismas consultas
 python scripts/compare_hito1_hito2.py             # → data/comparacion_hito1_hito2.csv + .json
 ```
 
-El comparador mide Top 1, Top 5 y tiempos por motor y por categoría. Resultados reales (20 consultas iniciales): Hito 2 mejora el Top 1 de 80% a 90% (ver `REPORTES_HITO2.md`).
+El comparador mide Top 1, Top 5 y tiempos por motor y por categoría. Resultados reales de Sala 2 (50 consultas): Hito 1 Top 1 35/50 (70%) · Hito 2 Top 1 33/50 (66%) · auto 37/50 (74%) (ver `REPORTES_HITO2.md`).
 
 ## Evaluación de las 20 pruebas (Sala 2)
 
@@ -190,20 +208,28 @@ Genera `data/reporte_evaluacion.xlsx` y la tabla Consulta | Top 1 correcto | Top
 ```text
 WebScraping/
 ├── api/                 # FastAPI + motor de búsqueda (Sala 3)
-│   ├── main.py           #   endpoints /search/image (Hito 1), /search/image/v2 (Hito 2) y /health
+│   ├── main.py           #   endpoints /search/image (modos, Sala 2), /search/image/v2 (Hito 2) y /health
 │   ├── search_engine.py  #   carga índice y search_similar(top_k=5) (Hito 1)
-│   └── search_engine_hito2.py # recuperación amplia + reranking (Hito 2, Sala 3)
+│   ├── search_engine_hito2.py # recuperación amplia + reranking (Hito 2, Sala 3)
+│   └── preprocesar_consulta.py # preparación de la consulta del usuario (Sala 2, Hito 2)
 ├── frontend/
-│   └── app.py           # Interfaz Streamlit (Sala 2, cliente HTTP de la API)
+│   └── app.py           # Interfaz Streamlit (Sala 2: antes/después, modos, comparación H1 vs H2)
 ├── data/
 │   ├── images/          # Imágenes crudas del scraping (fuente, legacy)
 │   ├── images_final/    # Imágenes con ID uniforme (entregable Sala 1)
 │   ├── images_normalized/ # Imágenes normalizadas frente+espalda (Sala 1, Hito 2)
-│   ├── products.csv     # Dataset canónico
+│   ├── consultas/       # 50 consultas de prueba (Sala 2, Hito 2)
+│   ├── queries_original/   # Consultas originales guardadas por la API (Sala 2, Hito 2)
+│   ├── queries_procesadas/ # Consultas preparadas guardadas por la API (Sala 2, Hito 2)
+│   ├── montajes/        # Antes/después (Sala 2, Hito 2)
+│   ├── productos.csv    # Dataset canónico
 │   ├── embeddings.npy   # Vectores CLIP (Sala 4)
 │   ├── ids.npy          # IDs alineados con embeddings
-│   ├── evaluation.csv   # Resultado de las 20 pruebas (Sala 2)
+│   ├── evaluation.csv   # Resultado de las evaluaciones (Sala 2)
 │   ├── tiempos.csv      # Tiempo por consulta
+│   ├── resultados_hito2.csv      # Resultados Hito 1 vs Hito 2 por consulta (Sala 2, Hito 2)
+│   ├── resumen_hito2.txt         # Top 1/Top 5 por regla y categoría (Sala 2, Hito 2)
+│   ├── evidencia_coherencia_hito2.txt # Coherencia del Top 5 (Sala 2, Hito 2)
 │   ├── comparacion_hito1_hito2.csv  # Comparación H1 vs H2 por consulta (Sala 3, Hito 2)
 │   ├── comparacion_hito1_hito2.json # Resumen Top 1/Top 5/tiempos (Sala 3, Hito 2)
 │   ├── informe_normalizacion.txt  # Resultados de la normalización (Sala 1)
@@ -213,17 +239,17 @@ WebScraping/
 │   ├── revision_humana_50.csv     # Clasificación de la muestra de 50 (Sala 1)
 │   ├── informe_revision_humana.txt # Resultados de las 50 revisiones (Sala 1)
 │   └── revision_contact_sheet.png # Hoja de contacto original|normalizada (Sala 1)
-├── scripts/             # consolidar, validar, normalizar, analizar formatos, embeddings, evaluación, reportes
+├── scripts/             # consolidar, validar, normalizar, analizar formatos, embeddings, evaluación, reportes, hito2
 ├── scraper/             # Engine de scraping (main.py lo usa)
 ├── utils/               # helpers, pagination, limits, update
 ├── storage/             # exportación a Excel
 ├── config/              # configuración del scraper
-├── evaluation/          # test_plan.csv + test_images/ (20 pruebas) + consultas_hito2.csv
+├── evaluation/          # consultas_hito2.csv + INFORME_SALA2_HITO2.md + test_plan.csv + test_images/
 ├── requirements.txt     # Dependencias del proyecto
 ├── main.py              # Punto de entrada del scraper
 ├── TRABAJO.md           # Consigna oficial del proyecto
 ├── REPORTES.md          # Auditoría del estado vs TRABAJO.md
-├── REPORTES_HITO2.md    # Reporte del Hito 2 (Sala 1 y Sala 3 implementadas)
+├── REPORTES_HITO2.md    # Reporte del Hito 2 (Sala 1, Sala 2 y Sala 3 implementadas)
 └── README.md            # Este documento
 ```
 

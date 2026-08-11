@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-app.py - Interfaz Streamlit (Sala 2, contrato Hito 1 / rama sala-2-v2)
------------------------------------------------------------------------
+app.py - Interfaz Streamlit (Sala 2, Hito 2)
+----------------------------------------------
 ESTA SALA NO GENERA EMBEDDINGS NI BUSCA LOCALMENTE.
 
 Flujo unico del proyecto:
@@ -9,13 +9,24 @@ Flujo unico del proyecto:
     -> la API genera el embedding con CLIP y busca en el indice unico
     -> devuelve Top 5 -> la interfaz muestra resultados y registra evaluacion
 
-Correr (con la API de Sala 3 levantada en el puerto 8000):
-    streamlit run app.py          # desde frontend/
+El endpoint /search/image de la API integra el modulo de preparacion de
+consultas de Sala 2 (api/preprocesar_consulta.py) y soporta modos:
 
-La API de Sala 3 se levanta con:
-    uvicorn api.main:app --port 8000   # desde la raíz del proyecto
+    auto      : prepara la consulta y devuelve respuesta enriquecida
+                (original + procesada + ambos rankings + preprocesamiento).
+    procesada : fuerza el uso de la imagen preparada (motor Hito 2).
+    original  : fuerza el uso de la consulta tal como llega (motor Hito 1).
+    legacy    : devuelve solo la lista del motor (comportamiento Hito 1).
+    completo  : prepara la consulta (Sala 2) + reranking visual (Sala 3).
+
+Correr (con la API de Sala 3 levantada en el puerto 8000):
+    streamlit run frontend/app.py          # desde la raiz del proyecto
+
+La API se levanta con:
+    uvicorn api.main:app --port 8000       # desde la raiz del proyecto
 """
 
+import base64
 import io
 import os
 
@@ -31,6 +42,14 @@ EVAL_CSV = os.path.join(DATA_DIR, "evaluation.csv")
 
 API_URL_DEFAULT = "http://localhost:8000"
 
+MODOS = {
+    "Auto (preparar + Hito 2)": "auto",
+    "Procesada (siempre preparada)": "procesada",
+    "Original (motor Hito 1)": "original",
+    "Completo (Sala 2 + reranking Sala 3)": "completo",
+    "Legacy (solo lista)": "legacy",
+}
+
 CLASIFICACIONES = {
     "Correcto": "Correcto",
     "Util, pero no duplicado": "Util_no_duplicado",
@@ -44,12 +63,13 @@ def api_url():
     return (st.session_state.get("api_url") or API_URL_DEFAULT).rstrip("/")
 
 
-def llamar_api(url, archivo):
+def llamar_api(url, archivo, modo):
     """Envia la imagen a FastAPI y devuelve (ok, datos_o_error)."""
     try:
         resp = requests.post(
             f"{url}/search/image",
             files={"file": (archivo.name, archivo.getvalue(), archivo.type)},
+            data={"modo": modo},
             timeout=120,
         )
     except requests.exceptions.ConnectionError:
@@ -72,6 +92,12 @@ def ruta_imagen_local(nombre_archivo):
     return ruta if os.path.exists(ruta) else None
 
 
+def _imagen_desde_b64(b64):
+    if not b64:
+        return None
+    return Image.open(io.BytesIO(base64.b64decode(b64)))
+
+
 def mostrar_resultado(rank, res, consulta):
     c1, c2 = st.columns([1, 2.2])
     with c1:
@@ -84,6 +110,8 @@ def mostrar_resultado(rank, res, consulta):
         st.markdown(f"**#{rank} — {res['nombre']}**")
         st.markdown(f"`{res['id']}` · Proveedor: {res['proveedor']}")
         st.markdown(f"**Score de similitud:** `{res['score']:.4f}`")
+        if res.get("score_reranking") is not None:
+            st.markdown(f"**Reranking Sala 3:** `{res['score_reranking']:.4f}`")
         st.markdown(f"[Abrir imagen original]({res['url']})")
         clasificacion = st.radio(
             "¿El resultado es relevante?",
@@ -102,6 +130,40 @@ def mostrar_resultado(rank, res, consulta):
         "clasificacion_humana": CLASIFICACIONES[clasificacion],
         "observacion": "",
     }
+
+
+def mostrar_antes_despues(data):
+    """Muestra la consulta original y la preparada (antes/despues)."""
+    orig = _imagen_desde_b64(data.get("imagen_original_b64"))
+    proc = _imagen_desde_b64(data.get("imagen_procesada_b64"))
+    if orig is None and proc is None:
+        return
+    st.subheader("Antes / Después (preparación de la consulta)")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Consulta original**")
+        if orig is not None:
+            st.image(orig, use_container_width=True)
+    with c2:
+        st.markdown("**Consulta preparada (Sala 2)**")
+        if proc is not None:
+            st.image(proc, use_container_width=True)
+    prep = data.get("preprocesamiento") or {}
+    if prep:
+        st.markdown(
+            f"Pasos: `{'; '.join(prep.get('pasos', [])) or 'ninguno'}` · "
+            f"Backend: `{prep.get('backend')}` · "
+            f"Recorte: `{prep.get('recorte_pct')}` · "
+            f"Preprocesado: `{prep.get('tiempo_segundos')}s`"
+        )
+
+
+def mostrar_ranking_extra(titulo, resultados):
+    if not resultados:
+        return
+    st.markdown(f"**{titulo}**")
+    for rank, r in enumerate(resultados, start=1):
+        st.markdown(f"{rank}. `{r['id']}` · {r['nombre']} · score `{r['score']:.4f}`")
 
 
 def guardar_evaluacion(filas):
@@ -153,6 +215,8 @@ st.caption("Una imagen se carga una sola vez, se procesa con un solo modelo, se 
 with st.sidebar:
     st.header("Conexion a la API")
     st.text_input("URL de la API (Sala 3)", value=API_URL_DEFAULT, key="api_url")
+    st.header("Modo de busqueda")
+    st.radio("Preparación de la consulta (Sala 2)", list(MODOS.keys()), key="modo_busqueda")
     if st.button("Ver estado del servidor", use_container_width=True):
         with st.spinner("Consultando /health..."):
             try:
@@ -172,6 +236,7 @@ if archivo is None:
     st.stop()
 
 consulta = archivo.name
+modo = MODOS[st.session_state.get("modo_busqueda", "Auto (preparar + Hito 2)")]
 
 col_q, col_r = st.columns([1, 2])
 with col_q:
@@ -181,12 +246,13 @@ with col_q:
 with col_r:
     st.subheader("Resultados similares")
 
-    if st.session_state.get("resultado_consulta") != consulta:
-        st.session_state["resultado_consulta"] = consulta
+    clave = f"{consulta}|{modo}"
+    if st.session_state.get("resultado_consulta") != clave:
+        st.session_state["resultado_consulta"] = clave
         st.session_state["resultados"] = None
         st.session_state["error"] = None
         with st.spinner("Procesando imagen..."):
-            ok, data = llamar_api(api_url(), archivo)
+            ok, data = llamar_api(api_url(), archivo, modo)
         if ok:
             st.session_state["resultados"] = data
             if data.get("tiempo_segundos") is not None:
@@ -212,6 +278,10 @@ with col_r:
         st.info("No se encontraron resultados.")
         st.stop()
 
+    mostrar_antes_despues(data)
+
+    st.caption(f"Modo usado por la API: `{data.get('modo', '?')}`")
+
     res = data.get("resultados") or []
     if not res:
         st.info("No se encontraron resultados.")
@@ -220,6 +290,15 @@ with col_r:
     filas = []
     for rank, r in enumerate(res, start=1):
         filas.append(mostrar_resultado(rank, r, consulta))
+
+    if modo != "legacy" and (data.get("resultados_original") or data.get("resultados_procesada")):
+        st.divider()
+        st.subheader("Comparación de rankings (Hito 1 vs Hito 2)")
+        c1, c2 = st.columns(2)
+        with c1:
+            mostrar_ranking_extra("Hito 1 (consulta original)", data.get("resultados_original") or [])
+        with c2:
+            mostrar_ranking_extra("Hito 2 (consulta preparada)", data.get("resultados_procesada") or [])
 
     observacion = st.text_area("Observacion sobre esta consulta (opcional)")
     if st.button("Guardar evaluacion de esta consulta", type="primary"):

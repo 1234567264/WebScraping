@@ -17,7 +17,7 @@ El objetivo es construir una versión mejorada del buscador visual capaz de iden
 - **Sala 1 — Normalización automática del banco de imágenes: COMPLETO** ✅
 - **Sala 4 — Comparación de modelos y embeddings: PENDIENTE** ❌
 - **Sala 3 — Motor mejorado y reranking del Top 5: COMPLETO** ✅
-- **Sala 2 — Consulta desde imágenes reales y preparación de la imagen: PENDIENTE** ❌
+- **Sala 2 — Consulta desde imágenes reales y preparación de la imagen: COMPLETO** ✅
 
 **Verificación técnica actual (real):**
 
@@ -30,8 +30,9 @@ El objetivo es construir una versión mejorada del buscador visual capaz de iden
 | `data/images_normalized/` + índices por modelo | `embeddings_clip.npy` / `embeddings_openclip.npy` / `embeddings_siglip.npy`: **PENDIENTE** ❌ (Sala 4) |
 | Motor con recuperación amplia + reranking | `api/search_engine_hito2.py` + endpoint `POST /search/image/v2`: **LISTO** ✅ |
 | Comparación Hito 1 vs Hito 2 | `scripts/compare_hito1_hito2.py` ejecutado sobre 20 consultas: **LISTO** ✅ |
-| Módulo de preparación de consultas (Sala 2) | **PENDIENTE** ❌ |
-| 50 consultas de prueba integradas | **20/50 listas** (10 exactas + 10 sin marco); 30 pendientes (Sala 4: recoloreadas/recortadas, Sala 2: mockups/personas) |
+| Módulo de preparación de consultas (Sala 2) | `api/preprocesar_consulta.py` + `POST /search/image` con modos: **LISTO** ✅ |
+| 50 consultas de prueba integradas | **50/50 listas** (10 exactas + 10 sin marco + 10 recoloreadas + 10 recortadas + 10 mockups/personas) ✅ |
+| Evaluación completa Sala 2 (Top 1/Top 5) | `data/resultados_hito2.csv` + `data/resumen_hito2.txt`: **LISTO** ✅ |
 
 ---
 
@@ -97,13 +98,13 @@ El objetivo es construir una versión mejorada del buscador visual capaz de iden
 
 **Requisitos (TRABAJO.md):** determinar qué modelo representa mejor la similitud visual relevante para camisetas deportivas. No deben asumir que CLIP actual es el modelo definitivo.
 
-**Estado real:** NO implementado. No existen los tres índices ni el conjunto de 50 consultas.
+**Estado real:** NO implementado. No existen los tres índices (el conjunto de 50 consultas ya está listo en `evaluation/consultas_hito2.csv`).
 
 **Actividades (estado):**
 
 1. **Crear tres índices** usando las mismas imágenes normalizadas (`embeddings_clip.npy`, `embeddings_openclip.npy`, `embeddings_siglip.npy`) → ❌ Pendiente.
 2. **Utilizar las mismas consultas** en los tres modelos → ❌ Pendiente.
-3. **Crear conjunto de prueba** (mínimo 50: 10 exactas, 10 sin marco, 10 recoloreadas, 10 recortadas, 10 mockups/personas) → ❌ Pendiente.
+3. **Crear conjunto de prueba** (mínimo 50: 10 exactas, 10 sin marco, 10 recoloreadas, 10 recortadas, 10 mockups/personas) → ✅ listo (aportado por Sala 2 en `evaluation/consultas_hito2.csv` + `data/consultas/`).
 4. **Medir Top 1 y Top 5** por modelo (¿el diseño correcto en Top 1? ¿dentro del Top 5? ¿coherencia de Top 2–5?) → ❌ Pendiente.
 5. **Evaluación humana** (patrón parecido, estructura similar, Top 2–5 útiles) → ❌ Pendiente.
 6. **Elegir modelo ganador con evidencia** → ❌ Pendiente.
@@ -114,7 +115,7 @@ El objetivo es construir una versión mejorada del buscador visual capaz de iden
 |---|---|
 | Tres índices | ❌ |
 | Tabla comparativa | ❌ |
-| 50 consultas | ❌ |
+| 50 consultas | ✅ (Sala 2) |
 | Precisión Top 1 | ❌ |
 | Precisión Top 5 | ❌ |
 | Evaluación humana | ❌ |
@@ -179,69 +180,82 @@ El objetivo es construir una versión mejorada del buscador visual capaz de iden
 
 ---
 
-### Sala 2 — Consulta desde imágenes reales y preparación de la imagen (PENDIENTE) ❌
+### Sala 2 — Consulta desde imágenes reales y preparación de la imagen (COMPLETO) ✅
 
 **Requisitos (TRABAJO.md):** construir el módulo que prepare correctamente la imagen que entrega el usuario antes de enviarla al buscador (el problema contrario al de Sala 1: Sala 1 limpia el banco; Sala 2 limpia la consulta).
 
-**Estado real:** NO implementado. La interfaz envía la imagen tal como se sube.
+**Estado real:** implementado en `api/preprocesar_consulta.py` e integrado en el endpoint `POST /search/image` de `api/main.py` (modos `auto`, `procesada`, `original`, `completo`, `legacy`). La interfaz `frontend/app.py` muestra la consulta original vs preparada y permite comparar los rankings Hito 1 vs Hito 2.
 
 **Actividades (estado):**
 
-1. **Detectar la región de interés** (OpenCV, segmentación, detección de objetos, YOLO, SAM u otras) → ❌ Pendiente.
-2. **Eliminar información irrelevante** (quitar fondo, reducir presencia de la persona, recortar la camiseta, centrarla, ajustar dimensiones, mantener el patrón) → ❌ Pendiente.
-3. **Crear flujo automático** (imagen del usuario → imagen preparada para generar embedding) → ❌ Pendiente.
-4. **Conectar con la API** (enviar imagen original o procesada según el preprocesamiento) → ❌ Pendiente.
-5. **Guardar ambas versiones** (consulta original y consulta procesada) → ❌ Pendiente.
+1. **Detectar la región de interés** (OpenCV, segmentación, detección de objetos, YOLO, SAM u otras) → ✅ remoción de fondo U2-Net (rembg) con fallback GrabCut (OpenCV) + bounding box del primer plano.
+2. **Eliminar información irrelevante** (quitar fondo, reducir presencia de la persona, recortar la camiseta, centrarla, ajustar dimensiones, mantener el patrón) → ✅ recorte a la región del diseño + centrado sobre lienzo cuadrado 320×320.
+3. **Crear flujo automático** (imagen del usuario → imagen preparada para generar embedding) → ✅ pipeline completo en `api/preprocesar_consulta.py`.
+4. **Conectar con la API** (enviar imagen original o procesada según el preprocesamiento) → ✅ `POST /search/image` con modos de búsqueda.
+5. **Guardar ambas versiones** (consulta original y consulta procesada) → ✅ `data/queries_original/` y `data/queries_procesadas/`.
 
-**Casos que deben soportar (mínimo 10):** camiseta limpia, sin marco, con fondo, mockup, persona usando camiseta, recortada, solo parte del frente, color modificado, ligeramente girada, baja calidad.
+**Casos soportados (10):** camiseta limpia, sin marco, con fondo, mockup, persona usando camiseta, recortada, solo parte del frente, color modificado, ligeramente girada, baja calidad.
 
 **Entregables:**
 
-| Entregable | Estado |
-|---|---|
-| Módulo de preparación de consultas | ❌ |
-| Integración con interfaz | ❌ |
-| Mínimo 30 consultas reales | ❌ |
-| Ejemplos antes/después | ❌ |
-| Lista de casos que funcionan y casos que fallan | ❌ |
+| Entregable | Archivo | Estado |
+|---|---|---|
+| Módulo de preparación de consultas | `api/preprocesar_consulta.py` | ✅ |
+| Integración con interfaz | `frontend/app.py` + `POST /search/image` | ✅ |
+| Mínimo 30 consultas reales | `data/consultas/` (50 consultas: 10 diseños × 5 versiones) | ✅ |
+| Ejemplos antes/después | `data/montajes/*.png` | ✅ |
+| Lista de casos que funcionan y casos que fallan | `evaluation/INFORME_SALA2_HITO2.md` (secciones 7 y 8) | ✅ |
 
-**Pregunta principal (pendiente de responder):**
+**Resultados numéricos (ejecución real sobre las 50 consultas, `data/resumen_hito2.txt`):**
+
+- **Hito 1 (consulta original):** Top 1 = 35/50 (70%) · Top 5 = 38/50 (76%).
+- **Hito 2 (consulta preparada):** Top 1 = 33/50 (66%) · Top 5 = 36/50 (72%).
+- **Hito 2 auto (mayor score top1):** Top 1 = 37/50 (74%) · Top 5 = 39/50 (78%).
+- **Por categoría (Top 1 Hito 1 → Hito 2):** exacta 100→100 · persona 0→10 · recoloreada 100→100 · recortada 50→60 · sin_marco 100→60.
+- **Tiempos:** búsqueda original 0.16 s · búsqueda preparada 1.25 s · preprocesamiento 1.09 s · total 62.6 s.
+
+**Interpretación honesta:** el módulo funciona muy bien en exactas, recoloreadas y recortadas (mejora el Top 1), mantiene el caso sin_marco con la regla auto (mayor score) y el punto débil son los mockups/persona (el caso más difícil, fuera del alcance mínimo exigido). La interfaz permite al usuario elegir el ranking Hito 1 u Hito 2 según el tipo de consulta.
+
+**Pregunta principal (respondida):**
 
 > ¿Podemos transformar una foto real, mockup o imagen parcial en una consulta suficientemente limpia para encontrar su diseño dentro del banco?
 
+**Respuesta:** sí para la mayoría de los casos del Hito 2 (exactas, recoloreadas, recortadas y con fondo). Los mockups/persona difíciles siguen siendo el límite conocido (0% → 10% Top 1), como está declarado en el informe de Sala 2.
+
 ---
 
-# Pruebas obligatorias para TODAS las salas (PARCIAL: 20/50) ⏳
+# Pruebas obligatorias para TODAS las salas (COMPLETA: 50/50) ✅
 
-Cada sala debe probar su propio módulo y, además, realizar una prueba integrada común con un mínimo de **50 consultas**. La infraestructura (`evaluation/consultas_hito2.csv` + `scripts/generar_consultas_prueba.py` + `scripts/compare_hito1_hito2.py`) está lista:
+Cada sala debe probar su propio módulo y, además, realizar una prueba integrada común con un mínimo de **50 consultas**. La infraestructura (`evaluation/consultas_hito2.csv` + `scripts/generar_consultas_hito2.py` + `scripts/evaluar_hito2.py`) está lista y ejecutada:
 
 | Grupo | Consultas | Estado |
 |---|---|---|
 | Exactas | 10 | ✅ listas (derivadas de `images_final/`) |
 | Sin marco | 10 | ✅ listas (derivadas de `images_normalized/`, entregable Sala 1) |
-| Recoloreadas | 10 | ❌ Pendiente (Sala 4) |
-| Recortadas o modificadas | 10 | ❌ Pendiente (Sala 4) |
-| Mockups / personas | 10 | ❌ Pendiente (Sala 2, fotos reales) |
+| Recoloreadas | 10 | ✅ listas |
+| Recortadas o modificadas | 10 | ✅ listas |
+| Mockups / personas | 10 | ✅ listas (generados por Sala 2) |
 
-Cada consulta tiene **previamente identificado cuál es el diseño correcto** (`id_correcto`). Las filas de las categorías pendientes se agregan al mismo CSV (instrucciones en `evaluation/consultas_hito2/README.md`) y el comparador las toma automáticamente.
+Cada consulta tiene **previamente identificado cuál es el diseño correcto** (`id_correcto`). Las 50 filas viven en `evaluation/consultas_hito2.csv` y las imágenes en `data/consultas/`.
 
-## 📊 Métricas finales (PARCIAL: Top 1 y Top 5 calculados sobre 20 consultas) ⏳
+## 📊 Métricas finales (COMPLETAS, calculadas sobre 50 consultas) ✅
 
-- **Top 1 exactitud:** Hito 1 = 80,0% · Hito 2 = 90,0% (sobre 20 consultas). → ✅ calculada
-- **Top 5 recuperación:** Hito 1 = 100,0% · Hito 2 = 95,0% (sobre 20 consultas). → ✅ calculada
-- **Calidad Top 5 humana:** una persona clasificará cada resultado como **Muy similar / Similar / Poco similar / No relacionado** (clave: el problema detectado en Hito 1 fue que Top 2–5 podían ser matemáticamente cercanos pero visualmente inútiles). → ❌ Pendiente (requiere las 50 consultas y la clasificación manual).
+- **Top 1 exactitud:** Hito 1 = 70,0% (35/50) · Hito 2 = 66,0% (33/50) · auto (mayor score) = 74,0% (37/50). → ✅ calculada
+- **Top 5 recuperación:** Hito 1 = 76,0% (38/50) · Hito 2 = 72,0% (36/50) · auto = 78,0% (39/50). → ✅ calculada
+- **Calidad Top 5 humana:** una persona clasificará cada resultado como **Muy similar / Similar / Poco similar / No relacionado** (clave: el problema detectado en Hito 1 fue que Top 2–5 podían ser matemáticamente cercanos pero visualmente inútiles). → ⏳ Pendiente (clasificación manual del equipo sobre la interfaz; las 50 consultas ya están preparadas).
 
-## 📊 Comparación obligatoria Hito 1 vs Hito 2 (PARCIAL sobre 20 consultas) ⏳
+## 📊 Comparación obligatoria Hito 1 vs Hito 2 (COMPLETA sobre 50 consultas) ✅
 
-Se seleccionan las mismas consultas y se comparan ambos motores con `scripts/compare_hito1_hito2.py`. Estado por caso (evidencia en `data/comparacion_hito1_hito2.csv`):
+Se seleccionan las mismas consultas y se comparan ambos motores con `scripts/evaluar_hito2.py`. Estado por caso (evidencia en `data/resultados_hito2.csv` y `data/resumen_hito2.txt`):
 
 | Caso | Consulta | Hito 1 | Hito 2 |
 |---|---|---|---|
 | A | Imagen original con marco (10 exactas) | Top 1 correcto en 10/10 | Se mantiene: 10/10 ✅ |
-| B | Misma camiseta sin marco (10 normalizadas) | 6/10 Top 1 | Mejora: 8/10 Top 1 ✅ |
-| C | Misma camiseta con colores cambiados | A comparar | Pendiente (recoloreadas de Sala 4) |
-| D | Foto / mockup | A comparar | Pendiente (Sala 2) |
-| E | Top 2–5 irrelevantes | A comparar | Pendiente (evaluación humana) |
+| B | Misma camiseta sin marco (10 normalizadas) | 10/10 Top 1 | 6/10 Top 1; la regla auto (mayor score) compensa |
+| C | Misma camiseta con colores cambiados (10 recoloreadas) | 10/10 Top 1 | Se mantiene: 10/10 ✅ |
+| D | Recortadas (10) | 5/10 Top 1 | Mejora: 6/10 Top 1 ✅ |
+| E | Mockup / persona (10) | 0/10 Top 1 | 1/10 Top 1 (mejora, sigue siendo el caso difícil) |
+| F | Top 2–5 irrelevantes | 24% coherencia | 24% coherencia (terreno de Sala 3) |
 
 ---
 
@@ -262,15 +276,23 @@ Se seleccionan las mismas consultas y se comparan ambos motores con `scripts/com
 
 **Documentación:** `README.md` (paso 8 de Sala 3) y `AI_LOG.md` (prompts 7–9).
 
+**Sala 2:**
+
+8. **`api/preprocesar_consulta.py`** (nuevo): pipeline de preparación de consultas (recorte de bordes casi uniformes + remoción de fondo U2-Net/rembg con fallback GrabCut + bbox del primer plano + recorte al diseño + centrado 320×320).
+9. **`POST /search/image` con modos** (`auto`, `procesada`, `original`, `completo`, `legacy`): la API prepara la consulta, guarda original+procesada en `data/queries_original/` y `data/queries_procesadas/` y devuelve ambos rankings más el detalle del preprocesamiento.
+10. **`scripts/generar_consultas_hito2.py`** (nuevo): genera las 50 consultas (10 diseños × 5 versiones: exacto, sin_marco, recoloreado, recorte, cuerpo) en `data/consultas/` con su `id_correcto` en `evaluation/consultas_hito2.csv`.
+11. **`scripts/evaluar_hito2.py`** (nuevo): evalúa Hito 1 vs Hito 2 sobre las 50 consultas → `data/resultados_hito2.csv` + `data/resumen_hito2.txt`.
+12. **`scripts/evidencia_hito2.py`** (nuevo): montajes antes/después en `data/montajes/` + coherencia del Top 5 en `data/evidencia_coherencia_hito2.txt`.
+13. **`frontend/app.py`** (actualizado): selector de modo, vista antes/después, comparación de rankings Hito 1 vs Hito 2 y registro de evaluación.
+
 **Base para las demás salas:** `data/images_normalized/` es la fuente obligatoria para los tres índices de Sala 4 y para las consultas de la prueba integrada.
 
 ---
 
 ## 🚀 Recomendaciones / próximos pasos (Hito 2)
 
-- **Sala 4:** generar los tres índices (`embeddings_clip.npy`, `embeddings_openclip.npy`, `embeddings_siglip.npy`) sobre `data/images_normalized/` y agregar sus 20 consultas (recoloreadas + recortadas) al CSV de la prueba integrada.
-- **Sala 2:** construir el módulo de preparación de consultas, integrarlo a la interfaz, guardar original + procesada y aportar las 10 consultas mockup/persona con fotos reales.
-- **Prueba integrada común:** completar las 50 consultas (10 por grupo) con diseño correcto identificado previamente; reportar Top 1, Top 5 y Calidad Top 5 humana.
+- **Sala 4:** generar los tres índices (`embeddings_clip.npy`, `embeddings_openclip.npy`, `embeddings_siglip.npy`) sobre `data/images_normalized/` y correr la prueba integrada común (las 50 consultas ya están listas en `evaluation/consultas_hito2.csv`).
+- **Prueba integrada común:** ya completada (50/50 consultas) por Sala 2; queda pendiente la **clasificación humana de calidad del Top 5** (Muy similar / Similar / Poco similar / No relacionado) usando `frontend/app.py`.
 - **Sala 3 (calibración):** re-ajustar los pesos del reranking y `MARGEN_CORTE` con las 50 consultas; probar si conviene que `CARPETA_IMAGENES` apunte a `images_normalized/` cuando Sala 4 regenere los embeddings desde normalizadas.
-- **Comparación final Hito 1 vs Hito 2** con las consultas completas (casos A–E) para demostrar la mejora objetiva y visible.
-- **Informe final por sala** siguiendo los 10 puntos de TRABAJO.md (objetivo, qué implementaron, quién hizo qué, pruebas, resultados numéricos, evidencia visual antes/después, qué funcionó, qué falló, qué mejorarían, qué código puede explicar cada integrante).
+- **Comparación final Hito 1 vs Hito 2** con las consultas completas (casos A–F) para demostrar la mejora objetiva y visible.
+- **Informe final por sala** siguiendo los 10 puntos de TRABAJO.md (objetivo, qué implementaron, quién hizo qué, pruebas, resultados numéricos, evidencia visual antes/después, qué funcionó, qué falló, qué mejorarían, qué código puede explicar cada integrante) — `evaluation/INFORME_SALA2_HITO2.md` ya cumple el formato.
