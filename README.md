@@ -1,8 +1,8 @@
-# WebScraping — RAG Visual (Hito 1)
+# WebScraping — RAG Visual (Hito 2)
 
-Plataforma de búsqueda visual de camisetas deportivas basada en **embeddings CLIP**. El proyecto scrapea catálogos de *Designs Aimari*, consolida un dataset, convierte cada imagen en un vector, y expone una API que devuelve el **Top 5 de diseños visualmente más parecidos** a una imagen cargada. Todo se presenta en una interfaz Streamlit.
+Plataforma de búsqueda visual de camisetas deportivas basada en **embeddings CLIP/OpenCLIP/SigLIP**. El proyecto scrapea catálogos de *Designs Aimari*, consolida y normaliza un dataset, convierte cada imagen en un vector, y expone una API que devuelve el **Top 5 de diseños visualmente más parecidos** a una imagen cargada. Todo se presenta en una interfaz Streamlit.
 
-> **Hito 1 — Integración real:** una sola fuente de datos, un solo índice de embeddings, un solo motor de búsqueda y una sola interfaz que consume la API.
+> **Hito 2 — Búsqueda visual robusta:** una camiseta puede encontrarse aunque la consulta no sea idéntica al banco (sin marco, recoloreada, recortada, mockup o persona), y el Top 5 pasa por un reranking visual para que tenga coherencia humana (Sala 4 compara modelos y Sala 3 mejora el motor).
 
 ## Flujo del sistema
 
@@ -13,11 +13,12 @@ Plataforma de búsqueda visual de camisetas deportivas basada en **embeddings CL
                 │
 [normalizar_imagenes.py] → data/images_normalized/   (Sala 1, Hito 2)
                 │
-[generar_embeddings.py] → data/embeddings.npy + data/ids.npy   (Sala 4)
+[generar_embeddings.py] → data/embeddings.npy + data/ids.npy   (Sala 4, Hito 1)
+[generar_indices_comparativos.py] → embeddings_clip/openclip/siglip.npy sobre images_normalized/   (Sala 4, Hito 2)
                 │
 [preprocesar_consulta.py] → prepara la imagen de consulta (Sala 2, Hito 2)
                 │
-[FastAPI api/main.py] → POST /search/image (modos) + /search/image/v2 + GET /health   (Sala 3)
+[FastAPI api/main.py] → POST /search/image (modos) + /search/image/v2 (índice normalizado + reranking) + GET /health   (Sala 3)
                 │
 [Streamlit frontend/app.py] → sube imagen, antes/después, Top 5, compara H1 vs H2 y registra evaluación   (Sala 2)
 ```
@@ -190,7 +191,22 @@ La API guarda por cada consulta la versión original y la procesada en `data/que
 python scripts/compare_hito1_hito2.py             # → data/comparacion_hito1_hito2.csv + .json
 ```
 
-El comparador mide Top 1, Top 5 y tiempos por motor y por categoría. Resultados reales de Sala 2 (50 consultas): Hito 1 Top 1 35/50 (70%) · Hito 2 Top 1 33/50 (66%) · auto 37/50 (74%) (ver `REPORTES_HITO2.md`).
+El comparador mide Top 1, Top 5 y tiempos por motor y por categoría. Resultados reales de Sala 2 (50 consultas, ids corrigidos): Hito 1 Top 1 32/50 (64%) · Hito 2 Top 1 30/50 (60%) · auto 35/50 (70%); con el motor normalizado de Sala 3: H1 30/50 vs H2 32/50 (ver `REPORTES_HITO2.md`).
+
+### 10. Comparación de modelos y embeddings (Sala 4 — Hito 2)
+
+Determina qué modelo representa mejor la similitud visual de camisetas deportivas usando exactamente las mismas imágenes normalizadas de Sala 1:
+
+```bash
+# a) Generar los TRES índices sobre data/images_normalized/ (1000 imágenes cada uno)
+python scripts/generar_indices_comparativos.py        # → data/embeddings_clip.npy · embeddings_openclip.npy · embeddings_siglip.npy
+# b) Evaluar los tres modelos contra el conjunto común de 50 consultas
+python scripts/evaluar_50_consultas.py                # → data/evaluation_metrics.csv (Top1/Top5) + data/revision_humana_modelos_top5.csv
+```
+
+Resultado real (50 consultas, índice normalizado): CLIP Top1 70% · OpenCLIP 84% · **SigLIP 92% (ganador, 46/50 Top 1)**; tiempos de generación: CLIP 42 s · OpenCLIP 44 s · SigLIP 162 s (detalle en `data/evaluation_metrics.csv` y `REPORTES_HITO2.md`).
+
+El motor Hito 2 de Sala 3 (`/search/image/v2`) ya recupera contra `embeddings_clip.npy` (índice normalizado) para mantener la coherencia vector ↔ imagen; el índice CLIP del Hito 1 (`embeddings.npy`, con marco) queda como baseline de comparación.
 
 ## Evaluación de las 20 pruebas (Sala 2)
 
@@ -207,10 +223,10 @@ Genera `data/reporte_evaluacion.xlsx` y la tabla Consulta | Top 1 correcto | Top
 
 ```text
 WebScraping/
-├── api/                 # FastAPI + motor de búsqueda (Sala 3)
+├── api/                 # FastAPI + motores de búsqueda (Sala 3)
 │   ├── main.py           #   endpoints /search/image (modos, Sala 2), /search/image/v2 (Hito 2) y /health
 │   ├── search_engine.py  #   carga índice y search_similar(top_k=5) (Hito 1)
-│   ├── search_engine_hito2.py # recuperación amplia + reranking (Hito 2, Sala 3)
+│   ├── search_engine_hito2.py # recuperación amplia (índice normalizado Sala 4) + reranking (Hito 2, Sala 3)
 │   └── preprocesar_consulta.py # preparación de la consulta del usuario (Sala 2, Hito 2)
 ├── frontend/
 │   └── app.py           # Interfaz Streamlit (Sala 2: antes/después, modos, comparación H1 vs H2)
@@ -223,10 +239,16 @@ WebScraping/
 │   ├── queries_procesadas/ # Consultas preparadas guardadas por la API (Sala 2, Hito 2)
 │   ├── montajes/        # Antes/después (Sala 2, Hito 2)
 │   ├── productos.csv    # Dataset canónico
-│   ├── embeddings.npy   # Vectores CLIP (Sala 4)
+│   ├── embeddings.npy   # Vectores CLIP sobre images_final (Sala 4, Hito 1)
+│   ├── embeddings_clip.npy      # Vectores CLIP sobre images_normalized (Sala 4, Hito 2)
+│   ├── embeddings_openclip.npy  # Vectores OpenCLIP sobre images_normalized (Sala 4, Hito 2)
+│   ├── embeddings_siglip.npy    # Vectores SigLIP 768d sobre images_normalized (Sala 4, Hito 2)
 │   ├── ids.npy          # IDs alineados con embeddings
+│   ├── consultas_test_50.json   # Conjunto de prueba de Sala 4 (50 consultas con id_correcto verificado)
+│   ├── evaluation_metrics.csv   # Top1/Top5 por modelo (Sala 4, Hito 2)
+│   ├── revision_humana_modelos_top5.csv # Clasificación humana Top5 por modelo (Sala 4, Hito 2)
 │   ├── evaluation.csv   # Resultado de las evaluaciones (Sala 2)
-│   ├── tiempos.csv      # Tiempo por consulta
+│   ├── tiempos.csv      # Tiempo por consulta (Sala 4 incluye generacion_*)
 │   ├── resultados_hito2.csv      # Resultados Hito 1 vs Hito 2 por consulta (Sala 2, Hito 2)
 │   ├── resumen_hito2.txt         # Top 1/Top 5 por regla y categoría (Sala 2, Hito 2)
 │   ├── evidencia_coherencia_hito2.txt # Coherencia del Top 5 (Sala 2, Hito 2)
@@ -239,7 +261,7 @@ WebScraping/
 │   ├── revision_humana_50.csv     # Clasificación de la muestra de 50 (Sala 1)
 │   ├── informe_revision_humana.txt # Resultados de las 50 revisiones (Sala 1)
 │   └── revision_contact_sheet.png # Hoja de contacto original|normalizada (Sala 1)
-├── scripts/             # consolidar, validar, normalizar, analizar formatos, embeddings, evaluación, reportes, hito2
+├── scripts/             # consolidar, validar, normalizar, analizar formatos, embeddings, índices comparativos (Sala 4), evaluación, reportes, hito2
 ├── scraper/             # Engine de scraping (main.py lo usa)
 ├── utils/               # helpers, pagination, limits, update
 ├── storage/             # exportación a Excel
@@ -249,7 +271,7 @@ WebScraping/
 ├── main.py              # Punto de entrada del scraper
 ├── TRABAJO.md           # Consigna oficial del proyecto
 ├── REPORTES.md          # Auditoría del estado vs TRABAJO.md
-├── REPORTES_HITO2.md    # Reporte del Hito 2 (Sala 1, Sala 2 y Sala 3 implementadas)
+├── REPORTES_HITO2.md    # Reporte del Hito 2 (las 4 salas completas)
 └── README.md            # Este documento
 ```
 
@@ -258,14 +280,19 @@ WebScraping/
 | Archivo | Contenido |
 |---|---|
 | `data/products.csv` | 1000 filas: `id, proveedor, pagina, imagen, nombre_original, url` |
-| `data/embeddings.npy` | Matriz `(1000, 512)` float32, normalizada L2 |
+| `data/embeddings.npy` | Matriz `(1000, 512)` float32, normalizada L2 (CLIP, banco con marco, Hito 1) |
+| `data/embeddings_clip.npy` | Matriz `(1000, 512)` CLIP sobre `images_normalized/` (Sala 4, Hito 2) |
+| `data/embeddings_openclip.npy` | Matriz `(1000, 512)` OpenCLIP sobre `images_normalized/` (Sala 4, Hito 2) |
+| `data/embeddings_siglip.npy` | Matriz `(1000, 768)` SigLIP sobre `images_normalized/` (Sala 4, Hito 2, ganador) |
 | `data/ids.npy` | 1000 IDs en el mismo orden que los embeddings |
+| `data/evaluation_metrics.csv` | Top 1/Top 5 por modelo y categoría (Sala 4, Hito 2) |
 | `data/evaluation.csv` | Evaluación de las 20 consultas (5 filas por consulta) |
 | `data/reporte_evaluacion.xlsx` | Resumen por consulta |
 | `data/images_normalized/` | 1000 imágenes normalizadas `AIM-Pxxx-NNN.jpg` (Sala 1, Hito 2) |
 | `data/informe_normalizacion.txt` | Estadísticas de la normalización (Sala 1, Hito 2) |
 | `data/informe_formatos.txt` | Análisis de formatos del banco (Sala 1, Hito 2) |
 | `data/revision_humana_50.csv` | Clasificación de las 50 revisiones (Sala 1, Hito 2) |
+| `data/revision_humana_modelos_top5.csv` | Top 5 por consulta y modelo para clasificación humana (Sala 4, Hito 2) |
 
 > **Nota sobre archivos legacy:** `data/index_embeddings.npy` y `data/index_metadata.json` son de `scripts/build_index.py` (fuera del flujo integrado). El flujo del Hito 1 usa únicamente `embeddings.npy` + `ids.npy`.
 

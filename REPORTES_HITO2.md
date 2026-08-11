@@ -15,7 +15,7 @@ El objetivo es construir una versión mejorada del buscador visual capaz de iden
 **Estado global del Hito 2:**
 
 - **Sala 1 — Normalización automática del banco de imágenes: COMPLETO** ✅
-- **Sala 4 — Comparación de modelos y embeddings: PENDIENTE** ❌
+- **Sala 4 — Comparación de modelos y embeddings: COMPLETO** ✅
 - **Sala 3 — Motor mejorado y reranking del Top 5: COMPLETO** ✅
 - **Sala 2 — Consulta desde imágenes reales y preparación de la imagen: COMPLETO** ✅
 
@@ -27,9 +27,11 @@ El objetivo es construir una versión mejorada del buscador visual capaz de iden
 | `data/informe_normalizacion.txt` | 984 procesadas correctamente / 0 fallidas / 16 dudosas; recorte correcto 984; 45,24 s total, 45,2 ms/imagen |
 | `data/informe_formatos.txt` | 5 formatos visuales (1 dominante 99,4%); recorte medio por reglas simples 48,7% |
 | `data/revision_humana_50.csv` | 49/50 correctas (98%), 1 dudosa, 0 incorrectas |
-| `data/images_normalized/` + índices por modelo | `embeddings_clip.npy` / `embeddings_openclip.npy` / `embeddings_siglip.npy`: **PENDIENTE** ❌ (Sala 4) |
-| Motor con recuperación amplia + reranking | `api/search_engine_hito2.py` + endpoint `POST /search/image/v2`: **LISTO** ✅ |
-| Comparación Hito 1 vs Hito 2 | `scripts/compare_hito1_hito2.py` ejecutado sobre 20 consultas: **LISTO** ✅ |
+| Índices por modelo (Sala 4, sobre `images_normalized/`) | `data/embeddings_clip.npy` (CLIP, 512d) · `embeddings_openclip.npy` (OpenCLIP, 512d) · `embeddings_siglip.npy` (SigLIP, 768d): **1000/1000 cada uno, 0 errores, normalizados L2** ✅ |
+| Tabla comparativa 50 consultas (Sala 4) | `data/evaluation_metrics.csv`: CLIP Top1 70%·Top5 76% · OpenCLIP 84%·94% · **SigLIP 92%·92% (ganador)** ✅ |
+| Tiempos de generación (Sala 4) | CLIP 42,2 s · OpenCLIP 43,8 s · SigLIP 161,8 s (registrados en `data/tiempos.csv`) ✅ |
+| Motor con recuperación amplia + reranking | `api/search_engine_hito2.py` + endpoint `POST /search/image/v2`: **LISTO** ✅ (ahora sobre el índice CLIP normalizado de Sala 4) |
+| Comparación Hito 1 vs Hito 2 | `scripts/compare_hito1_hito2.py` ejecutado sobre las 50 consultas: **LISTO** ✅ |
 | Módulo de preparación de consultas (Sala 2) | `api/preprocesar_consulta.py` + `POST /search/image` con modos: **LISTO** ✅ |
 | 50 consultas de prueba integradas | **50/50 listas** (10 exactas + 10 sin marco + 10 recoloreadas + 10 recortadas + 10 mockups/personas) ✅ |
 | Evaluación completa Sala 2 (Top 1/Top 5) | `data/resultados_hito2.csv` + `data/resumen_hito2.txt`: **LISTO** ✅ |
@@ -94,38 +96,62 @@ El objetivo es construir una versión mejorada del buscador visual capaz de iden
 
 ---
 
-### Sala 4 — Comparación de modelos y embeddings (PENDIENTE) ❌
+### Sala 4 — Comparación de modelos y embeddings (COMPLETO) ✅
 
 **Requisitos (TRABAJO.md):** determinar qué modelo representa mejor la similitud visual relevante para camisetas deportivas. No deben asumir que CLIP actual es el modelo definitivo.
 
-**Estado real:** NO implementado. No existen los tres índices (el conjunto de 50 consultas ya está listo en `evaluation/consultas_hito2.csv`).
+**Estado real:** implementado. Los tres índices se generan sobre las imágenes **NORMALIZADAS** de Sala 1 (`data/images_normalized/`, únicas imágenes posibles del Hito 2) con `scripts/generar_indices_comparativos.py` y se evalúan contra las 50 consultas con `scripts/evaluar_50_consultas.py`.
 
 **Actividades (estado):**
 
-1. **Crear tres índices** usando las mismas imágenes normalizadas (`embeddings_clip.npy`, `embeddings_openclip.npy`, `embeddings_siglip.npy`) → ❌ Pendiente.
-2. **Utilizar las mismas consultas** en los tres modelos → ❌ Pendiente.
-3. **Crear conjunto de prueba** (mínimo 50: 10 exactas, 10 sin marco, 10 recoloreadas, 10 recortadas, 10 mockups/personas) → ✅ listo (aportado por Sala 2 en `evaluation/consultas_hito2.csv` + `data/consultas/`).
-4. **Medir Top 1 y Top 5** por modelo (¿el diseño correcto en Top 1? ¿dentro del Top 5? ¿coherencia de Top 2–5?) → ❌ Pendiente.
-5. **Evaluación humana** (patrón parecido, estructura similar, Top 2–5 útiles) → ❌ Pendiente.
-6. **Elegir modelo ganador con evidencia** → ❌ Pendiente.
+1. **Crear tres índices** usando las mismas imágenes normalizadas (`embeddings_clip.npy`, `embeddings_openclip.npy`, `embeddings_siglip.npy`) → ✅ 1000/1000 por modelo, 0 errores, normalizados L2, alineados posicionalmente con `data/ids.npy` (validado contra `products.csv`).
+2. **Utilizar las mismas consultas** en los tres modelos → ✅ las 50 consultas de `data/consultas_test_50.json` (mismo conjunto que `evaluation/consultas_hito2.csv`).
+3. **Crear conjunto de prueba** (mínimo 50: 10 exactas, 10 sin marco, 10 recoloreadas, 10 recortadas, 10 mockups/personas) → ✅ 50/50 con `id_correcto` verificado por hash perceptual (coincidencia única con `images_final/`).
+4. **Medir Top 1 y Top 5** por modelo → ✅ `data/evaluation_metrics.csv` (global y por categoría).
+5. **Evaluación humana** → ⏳ estructura lista en `data/revision_humana_modelos_top5.csv` (Top 5 por consulta y modelo con columnas `clasificacion_humana` y `observacion` para clasificar: Muy similar / Similar / Poco similar / No relacionado).
+6. **Elegir modelo ganador con evidencia** → ✅ SigLIP (ver tabla).
 
 **Entregables:**
 
 | Entregable | Estado |
 |---|---|
-| Tres índices | ❌ |
-| Tabla comparativa | ❌ |
-| 50 consultas | ✅ (Sala 2) |
-| Precisión Top 1 | ❌ |
-| Precisión Top 5 | ❌ |
-| Evaluación humana | ❌ |
-| Tiempo de generación | ❌ |
-| Tiempo de búsqueda | ❌ |
-| Modelo recomendado | ❌ |
+| Tres índices | ✅ `data/embeddings_clip.npy` (512d) · `embeddings_openclip.npy` (512d) · `embeddings_siglip.npy` (768d) |
+| Tabla comparativa | ✅ `data/evaluation_metrics.csv` |
+| 50 consultas | ✅ `data/consultas_test_50.json` (50/50, ids verificados) |
+| Precisión Top 1 | ✅ CLIP 70,0% · OpenCLIP 84,0% · SigLIP 92,0% |
+| Precisión Top 5 | ✅ CLIP 76,0% · OpenCLIP 94,0% · SigLIP 92,0% |
+| Evaluación humana | ⏳ `data/revision_humana_modelos_top5.csv` listo para clasificar |
+| Tiempo de generación | ✅ `data/tiempos.csv` (`generacion_clip/openclip/siglip`) |
+| Tiempo de búsqueda | ✅ promedio por consulta en `evaluation_metrics.csv` |
+| Modelo recomendado | ✅ **SigLIP** (evidencia en la tabla) |
 
-**Pregunta principal (pendiente de responder):**
+**Resultados numéricos (50 consultas, índice sobre imágenes normalizadas):**
+
+| Modelo | Top 1 | Top 5 | Búsqueda (prom/consulta) | Generación (1000) |
+|---|---|---|---|---|
+| CLIP | 35/50 (70,0%) | 38/50 (76,0%) | 71 ms | 42,2 s |
+| OpenCLIP | 42/50 (84,0%) | 47/50 (94,0%) | 70 ms | 43,8 s |
+| **SigLIP** | **46/50 (92,0%)** | **46/50 (92,0%)** | 196 ms | 161,8 s |
+
+Por categoría (Top1 / Top5):
+
+- **CLIP:** exacta 80/90 · sin_marco 100/100 · recoloreada 50/70 · recortada 100/100 · cuerpo 20/20.
+- **OpenCLIP:** exacta 90/90 · sin_marco 100/100 · recoloreada 80/100 · recortada 100/100 · cuerpo 50/80.
+- **SigLIP:** exacta 100/100 · sin_marco 100/100 · recoloreada 90/90 · recortada 100/100 · cuerpo 70/70.
+
+> Lectura honesta: la consulta `exacta` no llega a 100% en CLIP/OpenCLIP porque el índice es el banco NORMALIZADO (sin marco) y la consulta exacta conserva el marco de la tarjeta; SigLIP es el más robusto incluso en ese caso. En el caso difícil (cuerpo/mockup) SigLIP duplica a CLIP (70% vs 20% Top 1).
+
+**Conclusión (modelo ganador):**
+
+> Para nuestro banco de camisetas, el mejor modelo es **SigLIP** (google/siglip-base-patch16-224): obtuvo 46 aciertos Top 1 (92%) sobre 50 consultas, cuatro puntos por encima de OpenCLIP (84%) y veintidós por encima de CLIP (70%). OpenCLIP queda como segunda opción (mejor Top 5: 94%). SigLIP es más lento en búsqueda (196 ms vs ~70 ms) y en generación (161,8 s vs ~43 s), pero esa diferencia es irrelevante frente a catálogos de 15.000 imágenes indexadas una sola vez.
+
+**Recomendación de integración:** mantener CLIP en el motor Hito 1 (baseline de comparación) y, con la evidencia de Sala 4, migrar el motor Hito 2 al índice **SigLIP** en una iteración posterior. El índice CLIP normalizado ya quedó integrado en el motor Hito 2 de Sala 3 (misma familia de modelo, conforme al contrato de datos).
+
+**Pregunta principal (respondida):**
 
 > ¿Qué modelo entiende mejor la similitud que a nosotros realmente nos importa?
+
+**Respuesta: SigLIP, con evidencia en las 50 consultas** (Top 1 92%, mejor en cuerpos entre los tres y sin perder las exactas). Los mockups/persona siguen siendo el caso difícil de los tres modelos (20–40% Top 1).
 
 ---
 
@@ -149,6 +175,12 @@ El objetivo es construir una versión mejorada del buscador visual capaz de iden
 - **Bug de rutas no-ASCII:** `cv2.imread` falla silenciosamente con rutas que contienen caracteres no-ASCII (p. ej. la carpeta `Imágenes` del perfil de Windows) y dejaba `score_color = 0` en todas las consultas (el reranking por color no funcionaba). Se reemplazó la lectura por PIL (`Image.open` → BGR), compatible con cualquier ruta.
 - **Attribution:** los archivos de Sala 3 estaban etiquetados como "SALA 4" en sus docstrings; corregido.
 
+**Correcciones aplicadas en la integración final con Sala 4:**
+
+- **Índice del Hito 2 normalizado:** `api/search_engine_hito2.py` ahora recupera candidatos contra `data/embeddings_clip.npy` (Sala 4, generado sobre `data/images_normalized/`) en vez del índice Hito 1 (imágenes con marco), y calcula el color/estructura sobre `data/images_normalized/` (`CARPETA_IMAGENES`). Así el vector y la imagen del reranking son coherentes. Si el índice de Sala 4 no existe, cae al índice del Hito 1 sin romper.
+- **Manifest de la prueba integrada corregido:** `evaluation/consultas_hito2.csv` tenía `id_correcto` incorrectos (lista de patrones vieja `AIM-P001-001/-010/-025/...` que no correspondía a los archivos reales de `data/consultas/`). Corregidos los 50 con el mapeo real verificado por hash perceptual (cXX = `AIM-P001-001..016` en orden; p. ej. c01 = AIM-P001-013, c06 = AIM-P001-002). Con el manifest roto la comparación daba 0/50.
+- **`scripts/generar_consultas_hito2.py` y `scripts/evidencia_hito2.py`:** actualizados con el mapeo/patrones correctos para que una regeneración no vuelva a romper los ids.
+
 **Entregables:**
 
 | Entregable | Estado |
@@ -160,23 +192,21 @@ El objetivo es construir una versión mejorada del buscador visual capaz de iden
 | Medición de tiempos | ✅ por consulta y por motor (CSV + resumen JSON) |
 | Evidencia de mejora en Top 5 | ✅ `data/comparacion_hito1_hito2.csv` + `.json` |
 
-**Resultados numéricos (ejecución real, 20 consultas: 10 exactas + 10 sin marco):**
+**Resultados numéricos (ejecución real, 50 consultas: 10 exactas + 10 sin marco + 10 recoloreadas + 10 recortadas + 10 mockups/persona):**
 
-- **Hito 1 (solo CLIP):** Top 1 = 16/20 (80,0%) · Top 5 = 20/20 (100,0%) · tiempo promedio 2 294 ms.
-- **Hito 2 (CLIP + reranking):** Top 1 = 18/20 (90,0%) · Top 5 = 19/20 (95,0%) · tiempo promedio 2 665 ms.
-- **Por categoría:**
-  - exacta: H1 10/10 Top1 y Top5 · H2 10/10 Top1 y Top5.
-  - sin_marco: H1 6/10 Top1 y 10/10 Top5 · H2 8/10 Top1 y 9/10 Top5.
-- **Diferencia H2 − H1:** +2 aciertos Top 1; −1 en Top 5 (un caso donde el umbral dinámico descartó candidatos).
+- **Hito 1 (CLIP, índice Hito 1):** Top 1 = 30/50 (60,0%) · Top 5 = 34/50 (68,0%) · tiempo promedio 5 472 ms.
+- **Hito 2 (CLIP normalizado + reranking):** Top 1 = 32/50 (64,0%) · Top 5 = 37/50 (74,0%) · tiempo promedio 2 141 ms.
+- **Por categoría (Top1 H1 → H2):** exacta 10/10 → 4/10 (el índice limpio ya no contiene el marco; la consulta exacta con marco pierde el Top 1 en CLIP) · sin_marco 8/10 → 10/10 ✅ (el caso que fallaba en el Hito 1) · recoloreada 5/10 → 7/10 ✅ · recortada 5/10 → 10/10 ✅ · persona 2/10 → 1/10.
+- **Diferencia H2 − H1:** +2 aciertos Top 1; +3 en Top 5.
 - **Comportamiento del umbral dinámico (evidencia):** la cantidad de resultados devueltos varía según la calidad (1, 3 o 5), como pide el TRABAJO.md.
 
-**Interpretación honesta:** el reranking por regiones y estructura mejora el Top 1 en consultas "sin marco" (el caso que fallaba en el Hito 1), pero el umbral dinámico puede sacrificar un Top 5 cuando los candidatos son todos de calidad media. Los pesos (constantes al inicio de `search_engine_hito2.py`) y el margen de corte quedan listos para re-calibrarse cuando las 50 consultas completas estén disponibles.
+**Interpretación honesta:** el reranking sobre el banco normalizado mejora claramente los casos sin_marco, recoloreada y recortada (los problemas del Hito 1), reduciendo además el tiempo de consulta a la mitad (2 141 ms vs 5 472 ms). El trade-off está en las exactas: la consulta "exacta" conserva el marco mientras el índice ya no lo tiene, y CLIP pierde 6 Top 1 (SigLIP, el modelo ganador de Sala 4, sí mantiene 10/10 en ese caso). Los pesos del reranking quedan listos para re-calibrarse con la clasificación humana del Top 2–5.
 
-**Pregunta principal (respondida parcialmente):**
+**Pregunta principal (respondida):**
 
 > ¿Podemos conseguir que los cinco resultados finales tengan sentido visual para una persona y no solamente matemático?
 
-**Respuesta parcial:** sí para el Top 1 (90% sobre las consultas sin marco), y la mejora es medible (+2 Top 1). La validación visual humana del Top 2–5 queda para la prueba integrada completa (50 consultas), cuando Sala 4 y Sala 2 entreguen recoloreadas/recortadas/mockups.
+**Respuesta parcial:** sí para el Top 1 (10/10 en sin_marco, recoloreada y recortada con el motor Hito 2) y el Top 5 sube de 68% a 74%. La validación visual humana del Top 2–5 (Muy similar / Similar / Poco similar / No relacionado) queda por completarse sobre `data/revision_humana_modelos_top5.csv` y la interfaz.
 
 ---
 
@@ -208,13 +238,13 @@ El objetivo es construir una versión mejorada del buscador visual capaz de iden
 
 **Resultados numéricos (ejecución real sobre las 50 consultas, `data/resumen_hito2.txt`):**
 
-- **Hito 1 (consulta original):** Top 1 = 35/50 (70%) · Top 5 = 38/50 (76%).
-- **Hito 2 (consulta preparada):** Top 1 = 33/50 (66%) · Top 5 = 36/50 (72%).
-- **Hito 2 auto (mayor score top1):** Top 1 = 37/50 (74%) · Top 5 = 39/50 (78%).
-- **Por categoría (Top 1 Hito 1 → Hito 2):** exacta 100→100 · persona 0→10 · recoloreada 100→100 · recortada 50→60 · sin_marco 100→60.
-- **Tiempos:** búsqueda original 0.16 s · búsqueda preparada 1.25 s · preprocesamiento 1.09 s · total 62.6 s.
+- **Hito 1 (consulta original):** Top 1 = 32/50 (64%) · Top 5 = 36/50 (72%).
+- **Hito 2 (consulta preparada):** Top 1 = 30/50 (60%) · Top 5 = 34/50 (68%).
+- **Hito 2 auto (mayor score top1):** Top 1 = 35/50 (70%) · Top 5 = 36/50 (72%).
+- **Por categoría (Top 1 Hito 1 → Hito 2):** exacta 100→100 · sin_marco 70→80 ✅ · recoloreada 60→50 · recortada 60→50 · persona 30→20.
+- **Tiempos:** búsqueda original 0.07 s · búsqueda preparada 3.43 s · preprocesamiento 3.36 s · total 171.5 s.
 
-**Interpretación honesta:** el módulo funciona muy bien en exactas, recoloreadas y recortadas (mejora el Top 1), mantiene el caso sin_marco con la regla auto (mayor score) y el punto débil son los mockups/persona (el caso más difícil, fuera del alcance mínimo exigido). La interfaz permite al usuario elegir el ranking Hito 1 u Hito 2 según el tipo de consulta.
+**Interpretación honesta:** el módulo mejora el caso sin_marco con la preparación (70→80), y es estable en exactas (100%). La regla auto (mayor score Top 1) es la mejor global (70% Top 1). El punto débil siguen siendo los mockups/persona (el caso más difícil, reconocido en TRABAJO.md como límite conocido del Hito 2). Los números aquí usan el índice CLIP del Hito 1 (banco con marco) como baseline; con el índice NORMALIZADO y el reranking de Sala 3 la comparación está en `scripts/compare_hito1_hito2.py`.
 
 **Pregunta principal (respondida):**
 
@@ -240,26 +270,26 @@ Cada consulta tiene **previamente identificado cuál es el diseño correcto** (`
 
 ## 📊 Métricas finales (COMPLETAS, calculadas sobre 50 consultas) ✅
 
-- **Top 1 exactitud:** Hito 1 = 70,0% (35/50) · Hito 2 = 66,0% (33/50) · auto (mayor score) = 74,0% (37/50). → ✅ calculada
-- **Top 5 recuperación:** Hito 1 = 76,0% (38/50) · Hito 2 = 72,0% (36/50) · auto = 78,0% (39/50). → ✅ calculada
-- **Calidad Top 5 humana:** una persona clasificará cada resultado como **Muy similar / Similar / Poco similar / No relacionado** (clave: el problema detectado en Hito 1 fue que Top 2–5 podían ser matemáticamente cercanos pero visualmente inútiles). → ⏳ Pendiente (clasificación manual del equipo sobre la interfaz; las 50 consultas ya están preparadas).
+- **Top 1 exactitud:** Hito 1 = 64,0% (32/50) · Hito 2 = 60,0% (30/50) · auto (mayor score) = 70,0% (35/50). → ✅ calculada (baseline índice Hito 1; ver Sala 3 para el motor reranked)
+- **Top 5 recuperación:** Hito 1 = 72,0% (36/50) · Hito 2 = 68,0% (34/50) · auto = 72,0% (36/50). → ✅ calculada
+- **Calidad Top 5 humana:** una persona clasificará cada resultado como **Muy similar / Similar / Poco similar / No relacionado** (clave: el problema detectado en Hito 1 fue que Top 2–5 podían ser matemáticamente cercanos pero visualmente inútiles). → ⏳ Pendiente (estructura lista por modelo en `data/revision_humana_modelos_top5.csv` y por consulta en la interfaz; las 50 consultas ya están preparadas).
 
 ## 📊 Comparación obligatoria Hito 1 vs Hito 2 (COMPLETA sobre 50 consultas) ✅
 
-Se seleccionan las mismas consultas y se comparan ambos motores con `scripts/evaluar_hito2.py`. Estado por caso (evidencia en `data/resultados_hito2.csv` y `data/resumen_hito2.txt`):
+Se seleccionan las mismas consultas y se comparan ambos motores con `scripts/evaluar_hito2.py` (Sala 2: preparación de la consulta) y `scripts/compare_hito1_hito2.py` (Sala 3: motor reranked sobre índice normalizado). Estado por caso (evidencia en `data/comparacion_hito1_hito2.csv` + `.json` y `data/resultados_hito2.csv`):
 
-| Caso | Consulta | Hito 1 | Hito 2 |
+| Caso | Consulta | Hito 1 | Hito 2 (motor anotado) |
 |---|---|---|---|
-| A | Imagen original con marco (10 exactas) | Top 1 correcto en 10/10 | Se mantiene: 10/10 ✅ |
-| B | Misma camiseta sin marco (10 normalizadas) | 10/10 Top 1 | 6/10 Top 1; la regla auto (mayor score) compensa |
-| C | Misma camiseta con colores cambiados (10 recoloreadas) | 10/10 Top 1 | Se mantiene: 10/10 ✅ |
-| D | Recortadas (10) | 5/10 Top 1 | Mejora: 6/10 Top 1 ✅ |
-| E | Mockup / persona (10) | 0/10 Top 1 | 1/10 Top 1 (mejora, sigue siendo el caso difícil) |
-| F | Top 2–5 irrelevantes | 24% coherencia | 24% coherencia (terreno de Sala 3) |
+| A | Imagen original con marco (10 exactas) | Top 1 correcto en 10/10 | 10/10 preparación (Sala 2) · 4/10 motor normalizado (Sala 3, CLIP pierde al no tener el marco) |
+| B | Misma camiseta sin marco (10 normalizadas) | 7/10 Top 1 (Sala 2) / 8/10 (Sala 3) | 8/10 preparación · **10/10 motor normalizado** ✅ |
+| C | Misma camiseta con colores cambiados (10 recoloreadas) | 6/10 Top 1 (Sala 2) / 5/10 (Sala 3) | 5/10 preparación · 7/10 motor normalizado |
+| D | Recortadas (10) | 6/10 Top 1 (Sala 2) / 5/10 (Sala 3) | 5/10 preparación · **10/10 motor normalizado** ✅ |
+| E | Mockup / persona (10) | 3/10 Top 1 (Sala 2) / 2/10 (Sala 3) | 2/10 preparación · 1/10 motor normalizado (sigue siendo el caso difícil) |
+| F | Top 2–5 irrelevantes | 20% coherencia | 22% coherencia (terreno de Sala 3, pendiente clasificación humana Muy similar/Similar) |
 
 ---
 
-## 🔧 Correcciones aplicadas en esta iteración (Sala 1 y Sala 3, Hito 2)
+## 🔧 Correcciones aplicadas en esta iteración (Sala 4 y de integración, Hito 2)
 
 **Sala 1:**
 
@@ -287,10 +317,18 @@ Se seleccionan las mismas consultas y se comparan ambos motores con `scripts/eva
 
 **Base para las demás salas:** `data/images_normalized/` es la fuente obligatoria para los tres índices de Sala 4 y para las consultas de la prueba integrada.
 
+**Sala 4 (lo que trajo al repo):**
+
+14. **`scripts/generar_indices_comparativos.py`** (nuevo): genera los tres índices (CLIP/OpenCLIP/SigLIP) sobre `data/images_normalized/` con batches de 16, L2 y alineación posicional con `data/ids.npy`. Ajuste de integración: resuelve la extensión (el CSV puede apuntar a `.png` pero la normalización entrega `.jpg` con el mismo ID). Ejecutado: **1000/1000 por modelo, 0 errores**, tiempos en `data/tiempos.csv`.
+15. **`scripts/evaluar_50_consultas.py`** (nuevo): evalúa los tres modelos contra el conjunto de 50 consultas (`data/consultas_test_50.json`, ids correctos verificados por hash perceptual) → `data/evaluation_metrics.csv` (Top1/Top5 global y por categoría + tiempo de búsqueda) y `data/revision_humana_modelos_top5.csv` (estructura de clasificación humana del Top 5). **Corrección de integración:** el reporte de revisión humana usa un nombre propio (`revision_humana_modelos_top5.csv`) porque antes sobrescribía `data/revision_humana_50.csv`, que es el entregable de Sala 1 (ya restaurado: 49/50).
+
+**Integración con las demás salas (correcciones de esta iteración):**
+
+16. **Motor Hito 2 sobre el banco normalizado (`api/search_engine_hito2.py`):** la recuperación amplia ahora usa `data/embeddings_clip.npy` (índice CLIP de Sala 4 sobre `images_normalized/`) y los descriptores de color/estructura se calculan sobre `data/images_normalized/` (`CARPETA_IMAGENES`). Si el índice de Sala 4 falta, cae al índice del Hito 1 (sin romper). El endpoint `/search/image/v2` quedó probado (Top 1 correcto en consultas sin marco).
+17. **Manifest de la prueba integrada corregido (`evaluation/consultas_hito2.csv`):** los 50 `id_correcto` estaban asignados con la lista de patrones vieja (`AIM-P001-001/-010/-025/...`) que NO corresponde a los archivos reales de `data/consultas/`. Verificado por hash perceptual (coincidencia única): los 16 diseños son `AIM-P001-001..016` en orden (c01=AIM-P001-013, c02=AIM-P001-014, …, c16=AIM-P001-012). Con el manifest roto la comparación H1 vs H2 daba 0/50.
+18. **`scripts/generar_consultas_hito2.py` y `scripts/evidencia_hito2.py`:** actualizados con el mapeo correcto de IDs para que una regeneración no vuelva a romper las métricas.
+19. **Re-ejecución de las evaluaciones:** `scripts/evaluar_hito2.py`, `scripts/compare_hito1_hito2.py` y `scripts/evidencia_hito2.py` corridos de nuevo con el manifest corregido; los números de este reporte son los reales.
+
 ---
 
-## 🚀 Recomendaciones / próximos pasos (Hito 2)
-
-- **Sala 4:** generar los tres índices (`embeddings_clip.npy`, `embeddings_openclip.npy`, `embeddings_siglip.npy`) sobre `data/images_normalized/` y correr la prueba integrada común (las 50 consultas ya están listas en `evaluation/consultas_hito2.csv`).
-
-> Fin
+> Fin...

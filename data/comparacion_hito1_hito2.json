@@ -1,32 +1,44 @@
 {
-  "total_consultas": 20,
+  "total_consultas": 50,
   "omitidas": 0,
   "por_categoria": {
     "exacta": {
       "h1_top1": 10,
       "h1_top5": 10,
+      "h2_top1": 4,
+      "h2_top5": 7
+    },
+    "sin_marco": {
+      "h1_top1": 8,
+      "h1_top5": 9,
       "h2_top1": 10,
       "h2_top5": 10
     },
-    "sin_marco": {
-      "h1_top1": 6,
-      "h1_top5": 10,
-      "h2_top1": 8,
+    "recoloreada": {
+      "h1_top1": 5,
+      "h1_top5": 7,
+      "h2_top1": 7,
       "h2_top5": 9
+    },
+    "recortada": {
+      "h1_top1": 5,
+      "h1_top5": 6,
+      "h2_top1": 10,
+      "h2_top5": 10
     }
   },
   "por_motor": {
     "h1": {
-      "top1": 16,
-      "top5": 20,
-      "n": 20,
-      "tiempo_promedio_ms": 2294.3
+      "top1": 30,
+      "top5": 34,
+      "n": 50,
+      "tiempo_promedio_ms": 5471.9
     },
     "h2": {
-      "top1": 18,
-      "top5": 19,
-      "n": 20,
-      "tiempo_promedio_ms": 2665.1
+      "top1": 32,
+      "top5": 37,
+      "n": 50,
+      "tiempo_promedio_ms": 2141.1
     }
   }
 }

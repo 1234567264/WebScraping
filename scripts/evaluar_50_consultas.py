@@ -17,7 +17,7 @@ deriva por hash perceptual del archivo `cXX_exacto` contra `data/images_final/`
 
 Salida:
     data/evaluation_metrics.csv       reporte técnico Top1/Top5 por modelo (global y por categoría)
-    data/revision_humana_50.csv       estructura de revisión cualitativa: Top 5 por consulta/modelo
+    data/revision_humana_modelos_top5.csv  estructura de revisión cualitativa: Top 5 por consulta/modelo
     data/tiempos.csv                  tiempos de búsqueda por consulta/modelo (filas anexas)
 
 Uso:
@@ -48,7 +48,10 @@ IMAGES_FINAL_DIR = os.path.join(DATA_DIR, "images_final")
 IDS_PATH = os.path.join(DATA_DIR, "ids.npy")
 TEST_SET_JSON = os.path.join(DATA_DIR, "consultas_test_50.json")
 EVAL_METRICS_CSV = os.path.join(DATA_DIR, "evaluation_metrics.csv")
-REVISION_CSV = os.path.join(DATA_DIR, "revision_humana_50.csv")
+# OJO: este archivo NO debe llamarse revision_humana_50.csv, ese nombre
+# pertenece al entregable de Sala 1 (revisar_muestra_50.py). La revisión
+# cualitativa del Top 5 por modelo va en un archivo propio de Sala 4.
+REVISION_CSV = os.path.join(DATA_DIR, "revision_humana_modelos_top5.csv")
 TIEMPOS_CSV = os.path.join(DATA_DIR, "tiempos.csv")
 
 TOP_K = 5

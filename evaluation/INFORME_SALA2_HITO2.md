@@ -70,35 +70,40 @@ ligeramente girada y baja calidad (resize de la imagen consultada).
 
 ## 5. Resultados numéricos
 
+> Nota: estos resultados usan el índice CLIP del Hito 1 (`data/embeddings.npy`,
+> banco con marco). La corrida con el índice NORMALIZADO de Sala 4 y el motor
+> reranked de Sala 3 está en `scripts/compare_hito1_hito2.py` y
+> `REPORTES_HITO2.md`.
+
 ### Top 1 y Top 5 (50 consultas comunes, mismo índice CLIP)
 
 | Regla | Top 1 | Top 5 |
 |---|---|---|
-| Hito 1 (consulta original) | 35/50 (70%) | 38/50 (76%) |
-| Hito 2 (consulta preparada) | 33/50 (66%) | 36/50 (72%) |
-| Hito 2 auto (mayor score top1) | 37/50 (74%) | 39/50 (78%) |
+| Hito 1 (consulta original) | 32/50 (64%) | 36/50 (72%) |
+| Hito 2 (consulta preparada) | 30/50 (60%) | 34/50 (68%) |
+| Hito 2 auto (mayor score top1) | 35/50 (70%) | 36/50 (72%) |
 
 ### Por categoría (Top 1 y Top 5, Hito 1 → Hito 2)
 
 | Categoría | n | Top1 H1 | Top1 H2 | Top5 H1 | Top5 H2 |
 |---|---|---|---|---|---|
 | exacta | 10 | 100% | 100% | 100% | 100% |
-| sin_marco | 10 | 100% | 60% | 100% | 70% |
-| recoloreada | 10 | 100% | 100% | 100% | 100% |
-| recortada | 10 | 50% | 60% | 70% | 70% |
-| persona | 10 | 0% | 10% | 10% | 20% |
+| sin_marco | 10 | 70% | 80% | 90% | 90% |
+| recoloreada | 10 | 60% | 50% | 70% | 70% |
+| recortada | 10 | 60% | 50% | 70% | 50% |
+| persona | 10 | 30% | 20% | 30% | 30% |
 
 ### Tiempos (batch, modelo caliente)
 
-- Búsqueda con consulta original: **0.16 s** promedio.
-- Búsqueda con consulta preparada: **1.25 s** promedio.
-- Preprocesamiento: **1.09 s** promedio.
-- Total de las 50 consultas: **62.6 s**.
+- Búsqueda con consulta original: **0.07 s** promedio.
+- Búsqueda con consulta preparada: **3.43 s** promedio.
+- Preprocesamiento: **3.36 s** promedio (GrabCut; U2-Net más lento).
+- Total de las 50 consultas: **171.5 s**.
 
 ### Coherencia del Top 5 (misma familia de diseño AIM-PXXX)
 
-- Hito 1: **24%** de los resultados comparten familia con el correcto.
-- Hito 2: **24%**.
+- Hito 1: **20%** de los resultados comparten familia con el correcto.
+- Hito 2: **22%**.
 - La coherencia del Top 2–5 sigue siendo el punto débil (terreno de Sala 3:
   recuperación amplia + reranking). Detalle por categoría en
   `data/evidencia_coherencia_hito2.txt`.
@@ -120,10 +125,10 @@ Además, la API guarda por cada consulta la versión original y la preparada en
 
 - **Recoloreadas y exactas: 100% Top 5 en ambos motores.** El recorte +
   normalización cuadrada mantiene el diseño correcto en el Top 5.
-- **Recortadas: 50% → 60% Top 1.** El centrado/redimensionado del fragmento
-  recupera más diseños.
-- **Top 1 global Hito 1: 70% (35/50).** Con la regla auto (mayor score top1)
-  llega a 74% (37/50) y Top 5 a 78% (39/50).
+- **Sin marco: 70% → 80% Top 1.** La preparación es la que más mejora este
+  caso (el problema detectado en el Hito 1).
+- **Top 1 global Hito 1: 64% (32/50).** Con la regla auto (mayor score top1)
+  llega a 70% (35/50) y Top 5 a 72% (36/50).
 - **Remoción de fondo GrabCut/U2-Net**: funciona bien en mockups de persona y
   en fondos planos (camisetas generadas).
 - **Integración completa**: la API devuelve ambos rankings (original y

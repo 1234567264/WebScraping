@@ -1,9 +1,9 @@
 COHERENCIA DEL TOP 5 (proporcion de resultados de la misma familia de diseno)
 
 Categoria         Hito 1    Hito 2
-exacta               26%        28%
-persona              18%        16%
-recoloreada          24%        26%
-recortada            28%        28%
-sin_marco            24%        20%
-TOTAL                24%        24%
+exacta               22%        28%
+persona              10%        12%
+recoloreada          20%        24%
+recortada            20%        16%
+sin_marco            30%        28%
+TOTAL                20%        22%

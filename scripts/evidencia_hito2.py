@@ -35,11 +35,14 @@ MONT_OUT = os.path.join(BASE_DIR, "data", "montajes")
 EVIDENCIA_TXT = os.path.join(BASE_DIR, "data", "evidencia_coherencia_hito2.txt")
 
 EJEMPLOS = [
-    ("c01_recoloreado.jpeg", "recoloreada", "AIM-P001-001"),
-    ("c04_recorte.jpg", "recortada", "AIM-P001-040"),
-    ("c03_sin_marco.jpg", "sin_marco", "AIM-P001-025"),
-    ("c01_cuerpo.jpeg", "persona", "AIM-P001-001"),
-    ("c07_recoloreado.jpeg", "recoloreada", "AIM-P010-550"),
+    # ids correctos verificados por hash perceptual (cXX = AIM-P001-XXX en
+    # orden): c01=AIM-P001-013, c03=AIM-P001-015, c04=AIM-P001-016,
+    # c07=AIM-P001-003. NO usar PATRONES antiguos (AIM-P001-001/-025/-040/...).
+    ("c01_recoloreado.jpeg", "recoloreada", "AIM-P001-013"),
+    ("c04_recorte.jpg", "recortada", "AIM-P001-016"),
+    ("c03_sin_marco.jpg", "sin_marco", "AIM-P001-015"),
+    ("c01_cuerpo.jpeg", "persona", "AIM-P001-013"),
+    ("c07_recoloreado.jpeg", "recoloreada", "AIM-P001-003"),
 ]
 
 

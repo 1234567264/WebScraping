@@ -55,7 +55,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from api.search_engine import DATADIR, cargar_indice, search_similar
+from api.search_engine import DATADIR, search_similar
 
 # ── PESOS DEL SCORE FINAL (probar, no asumir) ────────────────────────────
 # Score_final = PESO_EMBEDDING*CLIP + PESO_COLOR_GLOBAL*color +
@@ -71,11 +71,19 @@ PESO_ESTRUCTURA   = 0.10   # distribución del patrón en grises (robusto al col
 # más de este valor por debajo del mejor resultado
 MARGEN_CORTE = 0.35
 
-# Carpeta donde viven las imágenes reales del catálogo (misma que usa Hito 1).
-# Si Sala 4 regenera los embeddings desde data/images_normalized/ (Hito 2),
-# cambiar esta constante a "images_normalized" para mantener la coherencia
-# entre el vector y la imagen sobre la que se calcula el color.
-CARPETA_IMAGENES = os.path.join(DATADIR, "images_final")
+# Carpeta donde viven las imágenes reales del catálogo para el reranking.
+# Hito 2 (integración Sala 4): los embeddings del motor se generan sobre las
+# imágenes NORMALIZADAS de Sala 1 (data/images_normalized/), por lo que el
+# color/estructura debe calcularse sobre la MISMA imagen que produjo el
+# vector (coherencia entre el score de CLIP y los descriptores visuales).
+CARPETA_IMAGENES = os.path.join(DATADIR, "images_normalized")
+
+# Índice CLIP del Hito 2: generado por Sala 4 sobre data/images_normalized/
+# (scripts/generar_indices_comparativos.py). Igual modelo que el Hito 1
+# (openai/clip-vit-base-patch32), pero sobre el banco limpio, por lo que un
+# query "sin marco" o preparado por Sala 2 encuentra mejor su diseño.
+INDICE_NORMALIZADO = os.path.join(DATADIR, "embeddings_clip.npy")
+IDS_NORMALIZADO = os.path.join(DATADIR, "ids.npy")
 
 # Resolución de la comparación estructural (baja = robusta a detalles)
 TAM_ESTRUCTURA = 32
@@ -84,6 +92,9 @@ TAM_ESTRUCTURA = 32
 # proceso. Con un catálogo fijo de 1000 imágenes esto evita re-leer el
 # archivo en cada consulta y acelera mucho la evaluación con 50 queries.
 _cache_descriptores = {}
+
+# Cache del índice normalizado (Sala 4): (embeddings, ids, df_productos)
+_indice_h2 = None
 
 
 # ─────────────────────────────────────────────
@@ -242,6 +253,97 @@ def _descriptores_de_archivo(nombre_archivo):
 # MOTOR CON RERANKING
 # ─────────────────────────────────────────────
 
+def cargar_indice_normalizado():
+    """
+    Carga el índice CLIP del Hito 2 (Sala 4): data/embeddings_clip.npy +
+    data/ids.npy alineados con data/products.csv. El vector de cada producto
+    corresponde a su imagen NORMALIZADA (Sala 1). Devuelve None si el índice
+    no existe (entonces el motor cae al índice del Hito 1).
+    """
+    global _indice_h2
+    if _indice_h2 is not None:
+        return _indice_h2
+    if not os.path.exists(INDICE_NORMALIZADO):
+        print("[search_engine_hito2] AVISO: no existe embeddings_clip.npy "
+              "(Sala 4); usando el índice CLIP del Hito 1 (images_final).")
+        return None
+
+    import pandas as pd
+
+    embeddings = np.load(INDICE_NORMALIZADO).astype(np.float32)
+    normas = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    normas[normas == 0] = 1e-10
+    embeddings = embeddings / normas
+
+    ids = None
+    if os.path.exists(IDS_NORMALIZADO):
+        try:
+            ids = np.load(IDS_NORMALIZADO, allow_pickle=True)
+        except Exception:
+            ids = None
+    if ids is None or len(ids) != len(embeddings):
+        csv_path = os.path.join(DATADIR, "products.csv")
+        if os.path.exists(csv_path):
+            df_csv = pd.read_csv(csv_path)
+            ids = df_csv["id"].values
+        else:
+            ids = None
+    if ids is None:
+        raise ValueError(
+            "No se pudo alinear embeddings_clip.npy con los IDs "
+            "(falta ids.npy o products.csv)"
+        )
+
+    df = None
+    csv_path = os.path.join(DATADIR, "products.csv")
+    if os.path.exists(csv_path):
+        df = pd.read_csv(csv_path)
+
+    _indice_h2 = (embeddings, np.asarray(ids), df)
+    print(f"[search_engine_hito2] Índice normalizado de Sala 4 cargado: "
+          f"{embeddings.shape[0]} productos x {embeddings.shape[1]} dims.")
+    return _indice_h2
+
+
+def buscar_en_indice_normalizado(query_embedding, top_k: int = 5) -> list[dict]:
+    """
+    Búsqueda por similitud coseno contra el índice CLIP del Hito 2
+    (imágenes normalizadas, Sala 4). Contrato de respuesta idéntico al del
+    Hito 1: id, nombre, imagen, url, proveedor, score.
+    """
+    indice = cargar_indice_normalizado()
+    if indice is None:
+        return search_similar(query_embedding, top_k=top_k)
+
+    embeddings, ids, df = indice
+    v_query = np.array(query_embedding, dtype=np.float32).flatten()
+    if v_query.shape[0] != embeddings.shape[1]:
+        raise ValueError(
+            f"El vector de consulta tiene {v_query.shape[0]} dimensiones, "
+            f"se esperaban {embeddings.shape[1]} (índice CLIP normalizado)"
+        )
+    norm_q = np.linalg.norm(v_query)
+    if norm_q == 0:
+        raise ValueError("El vector de consulta no puede ser un vector nulo")
+    v_query = v_query / norm_q
+
+    scores = np.dot(embeddings, v_query)
+    top_idx = np.argsort(scores)[::-1][:top_k]
+
+    resultados = []
+    for idx in top_idx:
+        row = {} if df is None else df.iloc[idx]
+        resultados.append({
+            "id": str(ids[idx]),
+            "nombre": str(row.get("nombre_original", row.get("nombre", ""))),
+            "imagen": str(row.get("imagen", "")),
+            "url": str(row.get("url", "")),
+            "proveedor": str(row.get("proveedor", "Designs Aimari")),
+            "score": round(float(scores[idx]), 4),
+        })
+    return resultados
+
+
 def search_similar_reranked(
     query_embedding,
     query_image,
@@ -251,8 +353,10 @@ def search_similar_reranked(
     """
     Búsqueda visual con reranking (Hito 2).
 
-    Paso 1: recuperación amplia con search_similar() del Hito 1 pidiendo
-    candidatos_iniciales en vez de top_k directo.
+    Paso 1: recuperación amplia contra el índice CLIP NORMALIZADO de Sala 4
+    (data/embeddings_clip.npy sobre data/images_normalized/), pidiendo
+    candidatos_iniciales en vez de top_k directo. Si el índice de Sala 4 no
+    existe, cae al índice del Hito 1 (embeddings.npy).
     Paso 2: reranking ponderando el score de CLIP con los scores de color
     global, color por regiones (frente/espalda) y estructura del patrón.
     Paso 3: umbral dinámico que permite devolver menos de top_k resultados.
@@ -267,16 +371,17 @@ def search_similar_reranked(
       - posicion_final  : rango final 1-indexado tras el reranking
       - modelo_utilizado: "clip+color_regiones+estructura"
     """
-    # Asegurar que el índice del Hito 1 está cargado (search_similar lo hace
-    # solo, pero esta importación no da error si df es None)
-    if os.path.isfile(os.path.join(DATADIR, "embeddings.npy")):
-        cargar_indice()
+    # El índice se carga de forma diferida (buscar_en_indice_normalizado), y
+    # el fallback al Hito 1 también (search_similar carga solo su índice).
 
     # ── Paso 1: RECUPERACIÓN AMPLIA ──────────────────────────────────────
     # Buscamos más candidatos de los que devolveremos para darle al
     # reranking la oportunidad de "resucitar" el diseño correcto si CLIP lo
-    # dejó fuera del top 5.
-    candidatos = search_similar(query_embedding, top_k=candidatos_iniciales)
+    # dejó fuera del top 5. La búsqueda se hace contra el índice CLIP
+    # NORMALIZADO (Sala 4, hito 2): los embeddings del banco limpio son
+    # coherentes con los descriptores de color/estructura que se calculan
+    # sobre images_normalized/.
+    candidatos = buscar_en_indice_normalizado(query_embedding, top_k=candidatos_iniciales)
 
     # Descriptores de la consulta, calculados una sola vez
     bgr_consulta = _a_imagen_bgr(query_image)

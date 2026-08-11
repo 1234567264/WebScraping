@@ -3,20 +3,20 @@ RESUMEN HITO 2 - SALA 2 (50 consultas comunes)
 Total consultas evaluadas: 50
 
 Regla                                   Top1      Top5
-Hito 1 (siempre original)              35/50     38/50
-Hito 2 (siempre procesada)             33/50     36/50
-Hito 2 auto: mayor score top1          37/50     39/50
-Hito 2 auto: recorte < 0.95            33/50     36/50
+Hito 1 (siempre original)              32/50     36/50
+Hito 2 (siempre procesada)             30/50     34/50
+Hito 2 auto: mayor score top1          35/50     36/50
+Hito 2 auto: recorte < 0.95            30/50     34/50
 
 Por categoria (Hito 1 -> Hito 2 procesada):
 Categoria        n   Top1 H1   Top1 H2   Top5 H1   Top5 H2
 exacta          10      100%       100%      100%       100%
-persona         10        0%        10%       10%        20%
-recoloreada     10      100%       100%      100%       100%
-recortada       10       50%        60%       70%        70%
-sin_marco       10      100%        60%      100%        70%
+persona         10       30%        20%       30%        30%
+recoloreada     10       60%        50%       70%        70%
+recortada       10       60%        50%       70%        50%
+sin_marco       10       70%        80%       90%        90%
 
-Tiempo promedio de busqueda (original):  0.16s
-Tiempo promedio de busqueda (preparada):  1.25s
-Tiempo promedio de preprocesamiento:      1.09s
-Tiempo total de las 50 consultas:         62.6s
+Tiempo promedio de busqueda (original):  0.07s
+Tiempo promedio de busqueda (preparada):  3.43s
+Tiempo promedio de preprocesamiento:      3.36s
+Tiempo total de las 50 consultas:         171.5s

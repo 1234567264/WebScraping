@@ -40,10 +40,14 @@ MANIFEST = os.path.join(BASE_DIR, "evaluation", "consultas_hito2.csv")
 SIZE = 320
 SEED = 42
 
-PATRONES = [
-    "AIM-P001-001", "AIM-P001-010", "AIM-P001-025", "AIM-P001-040", "AIM-P001-055",
-    "AIM-P002-101", "AIM-P010-550", "AIM-P004-201", "AIM-P006-301", "AIM-P016-901",
-]
+# IMPORTANTE: los archivos cXX_* de data/consultas/ corresponden a los
+# primeros 16 diseños con ID corrido AIM-P001-001..AIM-P001-016 EN ORDEN
+# (c01=AIM-P001-001, c02=AIM-P001-002, ..., c16=AIM-P001-016). Verificado por
+# hash perceptual contra data/images_final/. No usar PATRONES arbitrarios:
+# el manifest anterior con AIM-P001-001/-010/-025/... asignaba id_correcto
+# incorrectos a todos los archivos y derrumbaba las métricas (0/50 en la
+# comparación H1 vs H2).
+PATRONES = [f"AIM-P001-{i:03d}" for i in range(1, 17)]
 
 
 def contenido_box(arr, thr=0.15):

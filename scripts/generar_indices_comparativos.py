@@ -5,8 +5,9 @@ generar_indices_comparativos.py
 SALA 4 - Comparación de modelos y embeddings.
 
 Genera de forma independiente los tres índices de embeddings comparados a
-partir de `data/products.csv` (mismo orden de fila), las imágenes normalizadas
-en `data/images_final/` y los IDs ya existentes en `data/ids.npy`:
+partir de `data/products.csv` (mismo orden de fila), las imágenes NORMALIZADAS
+del Hito 2 (Sala 1) en `data/images_normalized/` y los IDs ya existentes en
+`data/ids.npy`:
 
     data/embeddings_clip.npy       CLIP     (openai/clip-vit-base-patch32,          N x 512)
     data/embeddings_openclip.npy   OpenCLIP (laion/CLIP-ViT-B-32-laion2B-s34B-b79K, N x 512)
@@ -44,11 +45,35 @@ warnings.filterwarnings("ignore")
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 CSV_PATH = os.path.join(DATA_DIR, "products.csv")
-IMAGES_DIR = os.path.join(DATA_DIR, "images_final")
+# Hito 2 (TRABAJO.md, Sala 4): los tres índices deben usar EXACTAMENTE las
+# mismas imágenes NORMALIZADAS por Sala 1 (data/images_normalized/), no las
+# originales con marco (data/images_final/).
+IMAGES_DIR = os.path.join(DATA_DIR, "images_normalized")
 IDS_PATH = os.path.join(DATA_DIR, "ids.npy")
 TIEMPOS_CSV = os.path.join(DATA_DIR, "tiempos.csv")
 
 BATCH_SIZE = 16
+
+
+def resolver_ruta_imagen(fila):
+    """
+    Devuelve la ruta de la imagen en data/images_normalized/.
+    La normalización de Sala 1 convierte TODO a .jpg con el mismo ID, así que
+    si el nombre exacto del CSV no existe (p. ej. AIM-P001-005.png) se busca
+    el equivalente <id>.jpg. Devuelve None si no hay ningún archivo.
+    """
+    ruta = os.path.join(IMAGES_DIR, fila["imagen"])
+    if os.path.exists(ruta):
+        return ruta
+    alternativas = [
+        os.path.join(IMAGES_DIR, fila["id"] + ".jpg"),
+        os.path.join(IMAGES_DIR, fila["id"] + ".png"),
+        os.path.join(IMAGES_DIR, os.path.splitext(fila["imagen"])[0] + ".jpg"),
+    ]
+    for candidata in alternativas:
+        if os.path.exists(candidata):
+            return candidata
+    return None
 
 # Modelos a comparar. Para SigLIP se usa SOLO el preprocesador de imagen
 # (SiglipImageProcessor) para no depender del tokenizador SentencePiece.
@@ -188,9 +213,10 @@ def generar_indice(cfg, filas, ids, device):
 
         for pos, fila in enumerate(lote):
             idx = lote_inicio + pos
-            ruta_imagen = os.path.join(IMAGES_DIR, fila["imagen"])
-            if not os.path.exists(ruta_imagen):
-                print(f"  [ERROR] Imagen no encontrada para {fila['id']}: {ruta_imagen}")
+            ruta_imagen = resolver_ruta_imagen(fila)
+            if ruta_imagen is None:
+                print(f"  [ERROR] Imagen no encontrada para {fila['id']}: "
+                      f"{fila['imagen']} ni equivalentes en {IMAGES_DIR}")
                 errores += 1
                 continue
             try:

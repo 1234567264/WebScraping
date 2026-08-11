@@ -80,7 +80,54 @@ mide Top 1/Top 5/tiempos, guarda `data/comparacion_hito1_hito2.csv` + `.json`) y
 **Resultado real sobre 20 consultas:** Hito 1: Top1 80% / Top5 100% (2 294 ms);
 Hito 2: Top1 90% / Top5 95% (2 665 ms). En sin_marco el Top 1 sube de 6/10 a 8/10.
 
-## Fecha: 2026-08-11 (rama sala-2 / Hito 2)
+## Fecha: 2026-08-11 (integración de Sala 4 / Hito 2)
+
+### Prompt 11 - Índices comparativos de Sala 4 sobre el banco normalizado
+**Propósito:** Sala 4 ya había generado `embeddings_clip/openclip/siglip.npy`
+pero desde `images_final/` (con marco), cuando TRABAJO.md exige usar exactamente
+las imágenes NORMALIZADAS de Sala 1. Además el CSV apunta a `.png` mientras la
+normalización entrega `.jpg` con el mismo ID.
+**Resultado:** `scripts/generar_indices_comparativos.py` lee ahora de
+`data/images_normalized/` con resolución de extensión (`<id>.jpg`). Re-ejecutado:
+CLIP 42,2 s · OpenCLIP 43,8 s · SigLIP 161,8 s; 1000/1000 por modelo, 0 errores,
+normalizados L2 (`data/tiempos.csv`).
+
+### Prompt 12 - Evaluación de Sala 4 y colisión de archivo con Sala 1
+**Propósito:** `scripts/evaluar_50_consultas.py` escribía su revisión humana en
+`data/revision_humana_50.csv`, el MISMO archivo del entregable de Sala 1
+(revisar_muestra_50.py), sobrescribiéndolo.
+**Resultado:** la salida de Sala 4 ahora es `data/revision_humana_modelos_top5.csv`
+(estructura de clasificación humana del Top 5) y se restauró el CSV de Sala 1
+(49/50 correctas, 1 dudosa). Evaluación real sobre 50 consultas con índices
+normalizados: **CLIP Top1 70% · OpenCLIP 84% · SigLIP 92% (ganador)**,
+`data/evaluation_metrics.csv`.
+
+### Prompt 13 - Manifest de la prueba integrada con ids incorrectos (CRÍTICO)
+**Propósito:** `evaluation/consultas_hito2.csv` asignaba `id_correcto` con la
+lista de patrones vieja (AIM-P001-001/-010/-025/...) que no correspondía a los
+archivos reales de `data/consultas/`; la comparación H1 vs H2 daba 0/50.
+**Resultado:** ids verificados por hash perceptual (coincidencia única): los 16
+diseños son `AIM-P001-001..016` en orden (c01=AIM-P001-013, c06=AIM-P001-002,
+c16=AIM-P001-012). Corregidos los 50 del manifest; `generar_consultas_hito2.py`
+y `evidencia_hito2.py` actualizados para no volver a romperlo.
+
+### Prompt 14 - Motor Hito 2 sobre el índice normalizado de Sala 4
+**Propósito:** integrar el entregable de Sala 4 en el motor de Sala 3: el
+reranking calculaba color/estructura sobre `images_final/` mientras el vector
+CLIP provenía del índice Hito 1 (incoherente).
+**Resultado:** `api/search_engine_hito2.py` recupera candidatos contra
+`data/embeddings_clip.npy` (índice normalizado de Sala 4) con `CARPETA_IMAGENES =
+images_normalized` y fallback al Hito 1 si falta el índice. `compare_hito1_hito2.py`
+re-ejecutado sobre las 50 consultas: **H1 Top1 30/50 (60%) → H2 32/50 (64%);
+Top5 34→37; sin_marco 8/10→10/10; recortada 5/10→10/10; tiempo por consulta
+5 472→2 141 ms**; `evaluar_hito2.py` y `evidencia_hito2.py` re-ejecutados;
+`REPORTES_HITO2.md`, `README.md` e `INFORME_SALA2_HITO2.md` actualizados.
+
+## Fecha: 2026-08-11 (rama sala-2 / Hito 2) — histórico, números superados
+
+> Nota: los resultados del Prompt 10 (35/50 · 33/50 · 37/50) usaban un manifest
+> con `id_correcto` incorrectos; corregido en el Prompt 13 (números reales:
+> 32/50 · 30/50 · 35/50 Top 1).
 
 ### Prompt 10 - Migración de Sala 2 a la estructura canónica del repo
 **Propósito:** El supervisor marcó que `REPORTES_HITO2.md` estaba desactualizado
